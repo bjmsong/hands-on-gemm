@@ -23,7 +23,12 @@ int main(int argc, char **argv){
         for (int j = 0; j < K; j++)
             Bt[j*N+i] = B[i*K+j];
     }
+    auto end = std::chrono::steady_clock::now();
+    auto dt = end - st;
+    float msec = std::chrono::duration_cast<std::chrono::milliseconds>(dt).count();
+    printf("spend %f ms with transpose\n", msec);
 
+    st = std::chrono::steady_clock::now();
     #pragma omp parallel for collapse(2)
     for(int i=0; i<M; i++){
         for(int j=0; j<K; j++){
@@ -34,9 +39,9 @@ int main(int argc, char **argv){
             C[i*K+j] = tmp;
         }
     }
-    auto end = std::chrono::steady_clock::now();
-    auto dt = end - st;
-    float msec = std::chrono::duration_cast<std::chrono::milliseconds>(dt).count();
+    end = std::chrono::steady_clock::now();
+    dt = end - st;
+    msec = std::chrono::duration_cast<std::chrono::milliseconds>(dt).count();
 
     printf("spend %f ms with size of (%d, %d, %d)\n", msec, M, N, K);
 

@@ -1,5 +1,6 @@
-#include <Eigen/Dense>
-using Eigen::MatrixXd;
+#include <cstdio>
+#include <cublas_v2.h>
+#include <cuda_runtime.h>
 
 void matrix_init(float* a, int M, int N){
     // A(M,N)
@@ -20,28 +21,27 @@ static void PrintAssert(bool condition, float a, float b) {
     }
 }
 
-// TODO: replace with cublas
-void checkResult(float* a, float* b, float* c, int M, int N, int K){
-    MatrixXd a_e(M,N);
-    MatrixXd b_e(N,K);
-    MatrixXd c_e(M,K);
+void checkResult(float* a, float* b, float* c, size_t bytes, int M, int N, int K){
 
-    for (int i = 0; i < M; ++i) {
-        for (int j = 0; j < N; ++j) {
-            a_e(i, j) = a[i * N + j];
-        }
-    }
+    float* c_check;
+    cudaMalloc(&c_check, bytes);
 
-    for (int i = 0; i < N; ++i) {
-        for (int j = 0; j < K; ++j) {
-            b_e(i, j) = b[i * K + j];
-        }
-    }
+    cublasHandle_t handle;
+	cublasCreate(&handle);
+	float alpha = 1.0f;
+	float beta = 0.0f;
+    // Calculate: c = (alpha*a) * b + (beta*c)
+	cublasSgemm(handle, CUBLAS_OP_N, CUBLAS_OP_N, M, N, K, 
+    &alpha, b, K, a, N, &beta, c_check, K);
 
-    c_e = a_e * b_e;
+    float* h_c_check = (float*)malloc(bytes);
+    cudaMemcpy(h_c_check, c_check, bytes, cudaMemcpyDeviceToHost);
 
     for (int i=0; i < M; i++){
         for (int j=0; j < K; j++)
-            PrintAssert(floatEqual(c[i*K + j],c_e(i, j)), c[i*K + j], c_e(i, j));
+            PrintAssert(floatEqual(c[i*K + j],h_c_check[i*K + j]), c[i*K + j], h_c_check[i*K + j]);
     }
+
+    free(h_c_check);
+    cudaFree(c_check);
 }

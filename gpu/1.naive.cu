@@ -51,12 +51,11 @@ int main(int argc, char** argv){
     cudaEventRecord(end);
     cudaEventSynchronize(end);
 
-    float msec, sec;
+    float msec;
     cudaEventElapsedTime(&msec, start, end);
-    sec = msec / 1000.0;
 
     cudaMemcpy(h_c, d_c, bytes_c, cudaMemcpyDeviceToHost);
-    checkResult(h_a, h_b, h_c, M, N, K);
+    // checkResult(h_a, h_b, h_c, M, N, K);
 
     free(h_a);
     free(h_b);

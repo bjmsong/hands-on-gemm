@@ -35,4 +35,8 @@ int main(int argc, char **argv){
 
     // TODO: 有diff
     // checkResult(A, B, C, M, N, K);
+
+    free(A);
+    free(B);
+    free(C);
 }

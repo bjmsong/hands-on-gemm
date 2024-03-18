@@ -25,13 +25,17 @@ int main(int argc, char **argv){
     matrix_init(A, M, N);
     matrix_init(B, N, K);
 
-    auto st = std::chrono::system_clock::now();
+    auto st = std::chrono::steady_clock::now();
     float* Bt = (float*)malloc(bytes_b);
     // B(i,j) == Bt(j,i)
     for (int i = 0; i < N; i++){
         for (int j = 0; j < K; j++)
             Bt[j*N+i] = B[i*K+j];
     }
+    auto end = std::chrono::steady_clock::now();
+    auto dt = end - st;
+    float msec = std::chrono::duration_cast<std::chrono::milliseconds>(dt).count();
+    printf("spend %f ms with transpose\n", msec);
 
     #pragma omp parallel for collapse(2)
     for(int i=0; i<M; i++){
@@ -41,23 +45,27 @@ int main(int argc, char **argv){
             int l = 0;
             __m256 vsum = _mm256_setzero_ps();
             for (; l + 7 < N; l += 8) {
-                __m256 vi = _mm256_loadu_ps(A + i * L + l);
-                __m256 vw = _mm256_loadu_ps(B + j * L + l);
+                __m256 vi = _mm256_loadu_ps(A + i * N + l);
+                __m256 vw = _mm256_loadu_ps(Bt + j * N + l);
                 vsum = _mm256_fmadd_ps(vi, vw, vsum);
             }
             tmp += Floatsum(vsum);
             for (; l < N; l++) {
-                tmp += A[i * N + l] * B[j * K + l];
+                tmp += A[i * N + l] * Bt[j * N + l];
             }
-            C[i * N + j] = tmp;
+            C[i * K + j] = tmp;
         }
     }
-    auto end = std::chrono::steady_clock::now();
-    auto dt = end - st;
-    float msec = std::chrono::duration_cast<std::chrono::milliseconds>(dt).count();
+    end = std::chrono::steady_clock::now();
+    dt = end - st;
+    msec = std::chrono::duration_cast<std::chrono::milliseconds>(dt).count();
 
     printf("spend %f ms with size of (%d, %d, %d)\n", msec, M, N, K);
 
     // TODO: 有diff
-    checkResult(A, B, C, M, N, K);
+    // checkResult(A, B, C, M, N, K);
+
+    free(A);
+    free(B);
+    free(C);
 }

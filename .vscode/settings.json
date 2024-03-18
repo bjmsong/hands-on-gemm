@@ -1,0 +1,10 @@
+{
+    "files.associations":{"*.cu":"cpp"},
+    "clangd.fallbackFlags": [
+        "-std=c++11",
+        "-I${workspaceFolder}", // root dir
+        "-I${workspaceFolder}/cpu",
+        "-I/root/eigen-3.4.0",
+        "-I/usr/local/cuda-11.8/targets/x86_64-linux/include"
+    ]
+  }

@@ -37,7 +37,7 @@ int main(int argc, char** argv){
     cudaMemcpy(d_a, h_a, bytes_a, cudaMemcpyHostToDevice);
     cudaMemcpy(d_b, h_b, bytes_b, cudaMemcpyHostToDevice);
 
-    int BLOCK_SIZE = 32;
+    int BLOCK_SIZE = 16;
     int GRID_SIZE = (N + BLOCK_SIZE - 1) / BLOCK_SIZE;
 
     dim3 grid(GRID_SIZE, GRID_SIZE);

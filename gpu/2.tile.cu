@@ -1,7 +1,7 @@
 #include <cuda_runtime.h>
 #include "helper.h" 
 
-#define TILE_WIDTH 32 
+#define TILE_WIDTH 16 
 __global__ void matrixMultipy(float* a, float* b, float* c, int M, int N, int K){
 
     __shared__ float Mds[TILE_WIDTH][TILE_WIDTH];
@@ -19,7 +19,7 @@ __global__ void matrixMultipy(float* a, float* b, float* c, int M, int N, int K)
             // load by col
             Nds[threadIdx.y][threadIdx.x] = b[(ph*TILE_WIDTH+threadIdx.y)*K + col];
             __syncthreads();
-
+    
             for(int i = 0; i < TILE_WIDTH; i++)
                 temp += Mds[threadIdx.y][i] * Nds[i][threadIdx.x];
             __syncthreads();

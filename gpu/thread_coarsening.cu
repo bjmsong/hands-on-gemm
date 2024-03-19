@@ -1,7 +1,7 @@
 #include <cuda_runtime.h>
 #include "helper.h" 
 
-#define TILE_WIDTH 32 
+#define TILE_WIDTH 16 
 #define CORSE_FATOR 4
 __global__ void matrixMultipy(float*  a, float* b, float* c, int M, int N, int K){
 
@@ -63,7 +63,7 @@ int main(int argc, char** argv){
     int BLOCK_SIZE = TILE_WIDTH;
     int GRID_SIZE = (N + BLOCK_SIZE - 1) / BLOCK_SIZE;
 
-    dim3 grid(GRID_SIZE, GRID_SIZE);
+    dim3 grid(GRID_SIZE/CORSE_FATOR, GRID_SIZE);
     dim3 block(BLOCK_SIZE, BLOCK_SIZE);
 
     cudaEvent_t start, end;

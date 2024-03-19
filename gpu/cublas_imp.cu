@@ -2,18 +2,6 @@
 #include <cublas_v2.h>
 #include "helper.h" 
 
-__global__ void matrixMultipy(float* a, float* b, float* c, int M, int N, int K){
-    int row = blockIdx.y * blockDim.y + threadIdx.y;
-    int col = blockIdx.x * blockDim.x + threadIdx.x;
-    float temp = 0;
-    if (row < M && col < K){
-        for (int i=0; i<N; i++){
-            temp += a[row * N + i] * b[i * K + col];
-        }
-        c[row * K + col] = temp;
-    }
-}
-
 int main(int argc, char** argv){
     int N = std::atoi(argv[1]);
     int M = N;

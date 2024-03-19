@@ -32,6 +32,7 @@ int main(int argc, char **argv){
     float msec = std::chrono::duration_cast<std::chrono::milliseconds>(dt).count();
 
     printf("spend %f ms with size of (%d, %d, %d)\n", msec, M, N, K);
+    printf("Computational Throughput: %f GFLOPS\n", (float)2*M*N*K*1e-6/msec);
 
     // TODO: 有diff
     // checkResult(A, B, C, M, N, K);

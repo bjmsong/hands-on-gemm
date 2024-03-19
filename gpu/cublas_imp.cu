@@ -44,13 +44,14 @@ int main(int argc, char** argv){
     dim3 grid(GRID_SIZE, GRID_SIZE);
     dim3 block(BLOCK_SIZE, BLOCK_SIZE);
 
+    cublasHandle_t handle;
+	cublasCreate(&handle);
+
     cudaEvent_t start, end;
     cudaEventCreate(&start);
     cudaEventCreate(&end);
     cudaEventRecord(start);
 
-    cublasHandle_t handle;
-	cublasCreate(&handle);
 	float alpha = 1.0f;
 	float beta = 0.0f;
     // Calculate: c = (alpha*a) * b + (beta*c)
@@ -63,6 +64,7 @@ int main(int argc, char** argv){
     float msec;
     cudaEventElapsedTime(&msec, start, end);
     printf("spend %f ms with size of (%d, %d, %d)\n", msec, M, N, K);
+    printf("Computational Throughput: %f TFLOPS\n", (float)2*M*N*K*1e-9/msec);
 
     cudaMemcpy(h_c, d_c, bytes_c, cudaMemcpyDeviceToHost);
     checkResult(d_a, d_b, h_c, bytes_c, M, N, K);

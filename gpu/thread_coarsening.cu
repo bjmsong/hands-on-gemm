@@ -2,31 +2,38 @@
 #include "helper.h" 
 
 #define TILE_WIDTH 32 
-__global__ void matrixMultipy(float* a, float* b, float* c, int M, int N, int K){
+#define CORSE_FATOR 4
+__global__ void matrixMultipy(float*  a, float* b, float* c, int M, int N, int K){
 
     __shared__ float Mds[TILE_WIDTH][TILE_WIDTH];
     __shared__ float Nds[TILE_WIDTH][TILE_WIDTH];
 
-    // each thread calculate (row, col) of Matrix C
+    // each thread calculate #CORSE_FATOR points of Matrix C
+    // (row, colStart), (row, colStart + TILE_WIDTH), ... (row, colStart + (CORSE_FATOR-1)*TILE_WIDTH)
     int row = blockIdx.y * blockDim.y + threadIdx.y;
-    int col = blockIdx.x * blockDim.x + threadIdx.x;
+    int colStart = blockIdx.x * blockDim.x * CORSE_FATOR + threadIdx.x;
 
-    float temp = 0;
-    if(row < M && col < K){
+    float temp[CORSE_FATOR];
+    for (int f = 0; f < CORSE_FATOR; f++){
+        temp[f] = 0.0f;
+    }
+    if(row < M && colStart < K){
         for(int ph=0; ph<N/TILE_WIDTH; ph++){
             // load by row
             Mds[threadIdx.y][threadIdx.x] = a[row * N + ph * TILE_WIDTH + threadIdx.x];
             // load by col
-            Nds[threadIdx.y][threadIdx.x] = b[(ph*TILE_WIDTH+threadIdx.y)*K + col];
-            __syncthreads();
+            for (int f = 0; f < CORSE_FATOR; f++){
+                Nds[threadIdx.y][threadIdx.x] = b[(ph*TILE_WIDTH+threadIdx.y)*K + colStart + f * TILE_WIDTH];
+                __syncthreads();
 
             for(int i = 0; i < TILE_WIDTH; i++)
-                temp += Mds[threadIdx.y][i] * Nds[i][threadIdx.x];
+                temp[f] += Mds[threadIdx.y][i] * Nds[i][threadIdx.x];
             __syncthreads();
         }
-        c[row*K + col] = temp;
+        for (int f = 0; f < CORSE_FATOR; f++)
+            c[row*K + colStart + f * TILE_WIDTH] = temp[f];
     }
-
+    }
 }
 
 int main(int argc, char** argv){

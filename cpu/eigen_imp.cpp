@@ -42,7 +42,8 @@ int main(int argc, char** argv){
   float msec = std::chrono::duration_cast<std::chrono::milliseconds>(dt).count();
 
   printf("spend %f ms with size of (%d, %d, %d)\n", msec, M, N, K);
+  printf("Computational Throughput: %f GFLOPS\n", (float)2*M*N*K*1e-6/msec);
 
-    free(A);
-    free(B);
+  free(A);
+  free(B);
 }

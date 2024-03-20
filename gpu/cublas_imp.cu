@@ -42,17 +42,23 @@ int main(int argc, char** argv){
 
 	float alpha = 1.0f;
 	float beta = 0.0f;
-    // c = (alpha*a) * b + (beta*c)
-	cublasSgemm(handle, CUBLAS_OP_N, CUBLAS_OP_N, M, N, K, 
-    &alpha, d_b, K, d_a, N, &beta, d_c, K);
+    cudaDeviceSynchronize();
+    int EXECUTE_TIMES = 100;
+    for (int n_count=0;n_count<EXECUTE_TIMES;n_count++){
+        // c = (alpha*a) * b + (beta*c)
+        cublasSgemm(handle, CUBLAS_OP_N, CUBLAS_OP_N, M, N, K, 
+        &alpha, d_b, K, d_a, N, &beta, d_c, K);
+    }
+    cudaDeviceSynchronize();
 
     cudaEventRecord(end);
+    cudaEventSynchronize(start);
     cudaEventSynchronize(end);
 
     float msec;
     cudaEventElapsedTime(&msec, start, end);
-    printf("spend %f ms with size of (%d, %d, %d)\n", msec, M, N, K);
-    printf("Computational Throughput: %f TFLOPS\n", (float)2*M*N*K*1e-9/msec);
+    printf("spend %f ms with size of (%d, %d, %d)\n", msec/EXECUTE_TIMES, M, N, K);
+    printf("Computational Throughput: %f TFLOPS\n", (float)2*M*N*K*1e-9*EXECUTE_TIMES/msec);
 
     cudaMemcpy(h_c, d_c, bytes_c, cudaMemcpyDeviceToHost);
     checkResult(d_a, d_b, h_c, bytes_c, M, N, K);

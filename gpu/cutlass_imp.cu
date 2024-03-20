@@ -280,8 +280,12 @@ cudaError_t TestCutlassGemm(int M, int N, int K, float alpha, float beta) {
     cudaEventCreate(&start);
     cudaEventCreate(&end);
     cudaEventRecord(start);
-
-  result = CutlassSgemmNN(M, N, K, alpha, A, lda, B, ldb, beta, C_cutlass, ldc);
+    cudaDeviceSynchronize();
+    int EXECUTE_TIMES = 100;
+    for (int n_count=0;n_count<EXECUTE_TIMES;n_count++){
+      result = CutlassSgemmNN(M, N, K, alpha, A, lda, B, ldb, beta, C_cutlass, ldc);
+    }
+    cudaDeviceSynchronize();
 
     cudaEventRecord(end);
     cudaEventSynchronize(end);
@@ -289,8 +293,8 @@ cudaError_t TestCutlassGemm(int M, int N, int K, float alpha, float beta) {
     float msec;
     cudaEventElapsedTime(&msec, start, end);
 
-    printf("spend %f ms with size of (%d, %d, %d)\n", msec, M, N, K);
-    printf("Computational Throughput: %f TFLOPS\n", (float)2*M*N*K*1e-9/msec);
+    printf("spend %f ms with size of (%d, %d, %d)\n", msec/EXECUTE_TIMES, M, N, K);
+    printf("Computational Throughput: %f TFLOPS\n", (float)2*M*N*K*1e-9*EXECUTE_TIMES/msec);
     
   if (result != cudaSuccess) {
     std::cerr << "CUTLASS GEMM kernel failed: "

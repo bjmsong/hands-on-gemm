@@ -63,9 +63,12 @@ int main(int argc, char** argv){
     cudaEventCreate(&start);
     cudaEventCreate(&end);
     cudaEventRecord(start);
-
-    matrixMultipy<<<grid, block>>>(d_a, d_b, d_c, N, N, N);
-    
+    cudaDeviceSynchronize();
+    int EXECUTE_TIMES = 100;
+    for (int n_count=0;n_count<EXECUTE_TIMES;n_count++){
+        matrixMultipy<<<grid, block>>>(d_a, d_b, d_c, N, N, N);
+    }
+    cudaDeviceSynchronize();
     cudaEventRecord(end);
     cudaEventSynchronize(end);
 
@@ -83,6 +86,6 @@ int main(int argc, char** argv){
     cudaFree(d_b);
     cudaFree(d_c);
 
-    printf("spend %f ms with size of (%d, %d, %d)\n", msec, M, N, K);
-    printf("Computational Throughput: %f TFLOPS\n", (float)2*M*N*K*1e-9/msec);
+    printf("spend %f ms with size of (%d, %d, %d)\n", msec/EXECUTE_TIMES, M, N, K);
+    printf("Computational Throughput: %f TFLOPS\n", (float)2*M*N*K*1e-9*EXECUTE_TIMES/msec);
 }

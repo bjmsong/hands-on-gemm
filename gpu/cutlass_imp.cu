@@ -288,6 +288,7 @@ cudaError_t TestCutlassGemm(int M, int N, int K, float alpha, float beta) {
     cudaDeviceSynchronize();
 
     cudaEventRecord(end);
+    cudaEventSynchronize(start);
     cudaEventSynchronize(end);
 
     float msec;

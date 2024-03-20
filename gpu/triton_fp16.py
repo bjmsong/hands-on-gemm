@@ -85,7 +85,7 @@ def matmul_kernel(
         # Advance the ptrs to the next K block.
         a_block_ptr = tl.advance(a_block_ptr, (0, BLOCK_SIZE_K))
         b_block_ptr = tl.advance(b_block_ptr, (BLOCK_SIZE_K, 0))
-    c = accumulator.to(tl.float32)
+    c = accumulator.to(tl.float16)
 
     # -----------------------------------------------------------
     # Write back the block of the output matrix C with masks.
@@ -122,8 +122,8 @@ def matmul(a, b):
 
 torch.manual_seed(0)
 M = N = K = 256
-a = torch.randn((M, N), device='cuda', dtype=torch.float32)
-b = torch.randn((N, K), device='cuda', dtype=torch.float32)
+a = torch.randn((M, N), device='cuda', dtype=torch.float16)
+b = torch.randn((N, K), device='cuda', dtype=torch.float16)
 # start_time = time.time()
 triton_output = matmul(a, b)
 # end_time = time.time()
@@ -159,8 +159,8 @@ else:
         args={},
     ))
 def benchmark(M, N, K, provider):
-    a = torch.randn((M, K), device='cuda', dtype=torch.float32)
-    b = torch.randn((K, N), device='cuda', dtype=torch.float32)
+    a = torch.randn((M, K), device='cuda', dtype=torch.float16)
+    b = torch.randn((K, N), device='cuda', dtype=torch.float16)
     quantiles = [0.5, 0.2, 0.8]
     if provider == 'torch':
         # 对每个kernel进行25次的warm_up和100次iteration

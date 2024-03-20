@@ -27,8 +27,8 @@
             "request": "launch",
             "name": "CUDA C++: Launch",
             "cwd": "${workspaceFolder}",
-            "program": "${workspaceFolder}/test",
-            "args": "2 2"
+            "program": "${workspaceFolder}/a.out",
+            "args": "16"
         }
     ]
 }

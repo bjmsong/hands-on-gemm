@@ -17,18 +17,18 @@ int main(int argc, char** argv){
     int M = N;
     int K = N;
 
-    size_t bytes_a = M * N * sizeof(float);
-    size_t bytes_b = N * K * sizeof(float);
-    size_t bytes_c = M * K * sizeof(float);
+    size_t bytes_a = M * N * sizeof(half);
+    size_t bytes_b = N * K * sizeof(half);
+    size_t bytes_c = M * K * sizeof(half);
 
-    float* h_a = (float*)malloc(bytes_a);
-    float* h_b = (float*)malloc(bytes_b);
-    float* h_c = (float*)malloc(bytes_c);
+    half* h_a = (half*)malloc(bytes_a);
+    half* h_b = (half*)malloc(bytes_b);
+    half* h_c = (half*)malloc(bytes_c);
 
     matrix_init(h_a, M, N);
     matrix_init(h_b, N, K);
 
-    float *d_a, *d_b, *d_c;
+    half *d_a, *d_b, *d_c;
     cudaMalloc(&d_a, bytes_a);
     cudaMalloc(&d_b, bytes_b);
     cudaMalloc(&d_c, bytes_c);
@@ -50,13 +50,13 @@ int main(int argc, char** argv){
     cudaEventCreate(&end);
     cudaEventRecord(start);
 
-	float alpha = 1.0f;
-	float beta = 0.0f;
+	__half alpha = 1.0f;
+	__half beta = 0.0f;
     cudaDeviceSynchronize();
     int EXECUTE_TIMES = 100;
-    for (int n_count=0;n_count<EXECUTE_TIMES;n_count++){
+    for (int n_count=0; n_count<EXECUTE_TIMES; n_count++){
         // c = (alpha*a) * b + (beta*c)
-        cublasSgemm(handle, CUBLAS_OP_N, CUBLAS_OP_N, M, N, K, 
+        cublasHgemm(handle, CUBLAS_OP_N, CUBLAS_OP_N, M, N, K, 
         &alpha, d_b, K, d_a, N, &beta, d_c, K);
     }
     cudaDeviceSynchronize();

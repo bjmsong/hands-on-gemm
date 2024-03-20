@@ -42,7 +42,7 @@ int main(int argc, char** argv){
 
 	float alpha = 1.0f;
 	float beta = 0.0f;
-    // Calculate: c = (alpha*a) * b + (beta*c)
+    // c = (alpha*a) * b + (beta*c)
 	cublasSgemm(handle, CUBLAS_OP_N, CUBLAS_OP_N, M, N, K, 
     &alpha, d_b, K, d_a, N, &beta, d_c, K);
 

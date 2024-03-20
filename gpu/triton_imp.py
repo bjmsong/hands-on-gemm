@@ -123,9 +123,7 @@ def matmul(a, b):
 # ---------
 
 torch.manual_seed(0)
-M = int(sys.argv[1])
-N = M
-K = M
+M = N = K = 256
 a = torch.randn((M, N), device='cuda', dtype=torch.float32)
 b = torch.randn((N, K), device='cuda', dtype=torch.float32)
 # start_time = time.time()

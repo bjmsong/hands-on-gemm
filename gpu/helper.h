@@ -24,9 +24,9 @@ bool Equal(float a, float b, float epsilon = 1e-5) {
     return std::abs(a - b) < epsilon;
 }
 
-bool Equal(half a, half b, float epsilon = 1e-5) {
-    return std::abs(a - b) < epsilon;
-}
+// bool Equal(half a, half b, float epsilon = 1e-5) {
+//     return std::abs(a - b) < epsilon;
+// }
 
 static void PrintAssert(bool condition, float a, float b) {
     if (!condition) {

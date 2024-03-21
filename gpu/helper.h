@@ -54,30 +54,6 @@ static void PrintAssert(bool condition, half a, half b) {
     }
 }
 
-void checkResult(float* a, float* b, float* c, size_t bytes, int M, int N, int K){
-
-    float* c_check;
-    checkCuda(cudaMalloc(&c_check, bytes));
-
-    cublasHandle_t handle;
-	cublasCreate(&handle);
-	float alpha = 1.0f;
-	float beta = 0.0f;
-    // Calculate: c = (alpha*a) * b + (beta*c)
-	cublasSgemm(handle, CUBLAS_OP_N, CUBLAS_OP_N, M, N, K, 
-    &alpha, b, K, a, N, &beta, c_check, K);
-
-    float* h_c_check = (float*)malloc(bytes);
-    checkCuda(cudaMemcpy(h_c_check, c_check, bytes, cudaMemcpyDeviceToHost));
-
-    for (int i=0; i < M; i++){
-        for (int j=0; j < K; j++)
-            PrintAssert(Equal(c[i*K + j],h_c_check[i*K + j]), c[i*K + j], h_c_check[i*K + j]);
-    }
-
-    free(h_c_check);
-    checkCuda(cudaFree(c_check));
-}
 
 void checkResult(float* a, float* b, float* c, size_t bytes, int M, int N, int K){
 

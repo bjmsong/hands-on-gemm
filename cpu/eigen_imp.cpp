@@ -37,13 +37,16 @@ int main(int argc, char** argv){
 
     Eigen::setNbThreads(10);
     auto st = std::chrono::steady_clock::now();
-    C_e = A_e * B_e;
+    int EXECUTE_TIMES = 100;
+    for (int n_count=0; n_count < EXECUTE_TIMES; n_count++){
+        C_e = A_e * B_e;
+    }
     auto end = std::chrono::steady_clock::now();
     auto dt = end - st;
     float msec = std::chrono::duration_cast<std::chrono::milliseconds>(dt).count();
 
-    printf("spend %f ms with size of (%d, %d, %d)\n", msec, M, N, K);
-    printf("Computational Throughput: %f GFLOPS\n", (float)2*M*N*K*1e-6/msec);
+    printf("spend %f ms with size of (%d, %d, %d)\n", msec/EXECUTE_TIMES, M, N, K);
+    printf("Computational Throughput: %f GFLOPS\n", (float)2*M*N*K*1e-6*EXECUTE_TIMES/msec);
     checkResult(A, B, C_e.data(), M, N, K);
 
     free(A);

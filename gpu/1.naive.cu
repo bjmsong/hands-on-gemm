@@ -66,6 +66,7 @@ int main(int argc, char** argv){
     cudaEventElapsedTime(&msec, start, end);
 
     checkCuda(cudaMemcpy(h_c, d_c, bytes_c, cudaMemcpyDeviceToHost));
+    // 有diff
     // checkResult(d_a, d_b, h_c, bytes_c, M, N, K);
 
     free(h_a);

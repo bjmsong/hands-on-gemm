@@ -2,7 +2,7 @@
 #include <chrono>
 #include "helper.h"
 
-using Eigen::MatrixXd;
+using Eigen::MatrixXf;
  
 int main(int argc, char** argv){
   int N = std::atoi(argv[1]);
@@ -18,9 +18,9 @@ int main(int argc, char** argv){
   matrix_init(A, M, N);
   matrix_init(B, N, K);
 
-  MatrixXd A_e(M,N);
-  MatrixXd B_e(N,K);
-  MatrixXd C_e(M,K);
+  MatrixXf A_e(M,N);
+  MatrixXf B_e(N,K);
+  MatrixXf C_e(M,K);
 
   for (int i = 0; i < M; ++i) {
       for (int j = 0; j < N; ++j) {
@@ -43,6 +43,7 @@ int main(int argc, char** argv){
 
   printf("spend %f ms with size of (%d, %d, %d)\n", msec, M, N, K);
   printf("Computational Throughput: %f GFLOPS\n", (float)2*M*N*K*1e-6/msec);
+  checkResult(A, B, C_e.data(), M, N, K);
 
   free(A);
   free(B);

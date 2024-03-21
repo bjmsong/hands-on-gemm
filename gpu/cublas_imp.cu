@@ -29,12 +29,12 @@ int main(int argc, char** argv){
     matrix_init(h_b, N, K);
 
     float *d_a, *d_b, *d_c;
-    cudaMalloc(&d_a, bytes_a);
-    cudaMalloc(&d_b, bytes_b);
-    cudaMalloc(&d_c, bytes_c);
+    checkCuda(cudaMalloc(&d_a, bytes_a));
+    checkCuda(cudaMalloc(&d_b, bytes_b));
+    checkCuda(cudaMalloc(&d_c, bytes_c));
 
-    cudaMemcpy(d_a, h_a, bytes_a, cudaMemcpyHostToDevice);
-    cudaMemcpy(d_b, h_b, bytes_b, cudaMemcpyHostToDevice);
+    checkCuda(cudaMemcpy(d_a, h_a, bytes_a, cudaMemcpyHostToDevice));
+    checkCuda(cudaMemcpy(d_b, h_b, bytes_b, cudaMemcpyHostToDevice));
 
     int BLOCK_SIZE = 32;
     int GRID_SIZE = (N + BLOCK_SIZE - 1) / BLOCK_SIZE;
@@ -44,14 +44,20 @@ int main(int argc, char** argv){
 
     cublasHandle_t handle;
 	cublasCreate(&handle);
+    float alpha = 1.0f;
+	float beta = 0.0f;
+    int WARMUP_TIMES = 100;
+    for (int n_count=0;n_count<WARMUP_TIMES;n_count++){
+        // c = (alpha*a) * b + (beta*c)
+        cublasSgemm(handle, CUBLAS_OP_N, CUBLAS_OP_N, M, N, K, 
+        &alpha, d_b, K, d_a, N, &beta, d_c, K);
+    }
 
     cudaEvent_t start, end;
-    cudaEventCreate(&start);
-    cudaEventCreate(&end);
-    cudaEventRecord(start);
+    checkCuda(cudaEventCreate(&start));
+    checkCuda(cudaEventCreate(&end));
+    checkCuda(cudaEventRecord(start));
 
-	float alpha = 1.0f;
-	float beta = 0.0f;
     cudaDeviceSynchronize();
     int EXECUTE_TIMES = 100;
     for (int n_count=0;n_count<EXECUTE_TIMES;n_count++){
@@ -61,23 +67,23 @@ int main(int argc, char** argv){
     }
     cudaDeviceSynchronize();
 
-    cudaEventRecord(end);
-    cudaEventSynchronize(start);
-    cudaEventSynchronize(end);
+    checkCuda(cudaEventRecord(end));
+    checkCuda(cudaEventSynchronize(start));
+    checkCuda(cudaEventSynchronize(end));
 
     float msec;
     cudaEventElapsedTime(&msec, start, end);
     printf("spend %f ms with size of (%d, %d, %d)\n", msec/EXECUTE_TIMES, M, N, K);
     printf("Computational Throughput: %f TFLOPS\n", (float)2*M*N*K*1e-9*EXECUTE_TIMES/msec);
 
-    cudaMemcpy(h_c, d_c, bytes_c, cudaMemcpyDeviceToHost);
+    checkCuda(cudaMemcpy(h_c, d_c, bytes_c, cudaMemcpyDeviceToHost));
     checkResult(d_a, d_b, h_c, bytes_c, M, N, K);
 
     free(h_a);
     free(h_b);
     free(h_c);
 
-    cudaFree(d_a);
-    cudaFree(d_b);
-    cudaFree(d_c);
+    checkCuda(cudaFree(d_a));
+    checkCuda(cudaFree(d_b));
+    checkCuda(cudaFree(d_c));
 }

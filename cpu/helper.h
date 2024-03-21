@@ -1,6 +1,6 @@
 #include <vector>
 #include <Eigen/Dense>
-using Eigen::MatrixXd;
+using Eigen::MatrixXf;
 
 void matrix_init(float* a, int M, int N){
     // A(M,N)
@@ -28,9 +28,9 @@ static void PrintAssert(bool condition, float a, float b) {
 }
 
 void checkResult(float* a, float* b, float* c, int M, int N, int K){
-    MatrixXd a_e(M,N);
-    MatrixXd b_e(N,K);
-    MatrixXd c_e(M,K);
+    MatrixXf a_e(M,N);
+    MatrixXf b_e(N,K);
+    MatrixXf c_e(M,K);
 
     for (int i = 0; i < M; ++i) {
         for (int j = 0; j < N; ++j) {

@@ -45,8 +45,7 @@ int main(int argc, char **argv){
 
     printf("spend %f ms with size of (%d, %d, %d)\n", msec, M, N, K);
 
-    // TODO: 有diff
-    // checkResult(A, B, C, M, N, K);
+    checkResult(A, B, C, M, N, K);
 
     free(A);
     free(B);

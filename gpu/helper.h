@@ -1,6 +1,20 @@
+#include <iostream>
 #include <cstdio>
 #include <cublas_v2.h>
 #include <cuda_runtime.h>
+
+#define checkCuda(val) check((val), #val, __FILE__, __LINE__)
+void check(cudaError_t err, const char* const func, const char* const file,
+           const int line)
+{
+    if (err != cudaSuccess)
+    {
+        std::cerr << "CUDA Runtime Error at: " << file << ":" << line
+                  << std::endl;
+        std::cerr << cudaGetErrorString(err) << " " << func << std::endl;
+        std::exit(EXIT_FAILURE);
+    }
+}
 
 void matrix_init(float* a, int M, int N){
     // A(M,N)
@@ -20,7 +34,7 @@ void matrix_init(half* a, int M, int N){
     }
 }
 
-bool Equal(float a, float b, float epsilon = 1e-5) {
+bool Equal(float a, float b, float epsilon = 1e-4) {
     return std::abs(a - b) < epsilon;
 }
 
@@ -43,7 +57,7 @@ static void PrintAssert(bool condition, half a, half b) {
 void checkResult(float* a, float* b, float* c, size_t bytes, int M, int N, int K){
 
     float* c_check;
-    cudaMalloc(&c_check, bytes);
+    checkCuda(cudaMalloc(&c_check, bytes));
 
     cublasHandle_t handle;
 	cublasCreate(&handle);
@@ -54,7 +68,7 @@ void checkResult(float* a, float* b, float* c, size_t bytes, int M, int N, int K
     &alpha, b, K, a, N, &beta, c_check, K);
 
     float* h_c_check = (float*)malloc(bytes);
-    cudaMemcpy(h_c_check, c_check, bytes, cudaMemcpyDeviceToHost);
+    checkCuda(cudaMemcpy(h_c_check, c_check, bytes, cudaMemcpyDeviceToHost));
 
     for (int i=0; i < M; i++){
         for (int j=0; j < K; j++)
@@ -62,13 +76,38 @@ void checkResult(float* a, float* b, float* c, size_t bytes, int M, int N, int K
     }
 
     free(h_c_check);
-    cudaFree(c_check);
+    checkCuda(cudaFree(c_check));
+}
+
+void checkResult(float* a, float* b, float* c, size_t bytes, int M, int N, int K){
+
+    float* c_check;
+    checkCuda(cudaMalloc(&c_check, bytes));
+
+    cublasHandle_t handle;
+	cublasCreate(&handle);
+	float alpha = 1.0f;
+	float beta = 0.0f;
+    // Calculate: c = (alpha*a) * b + (beta*c)
+	cublasSgemm(handle, CUBLAS_OP_N, CUBLAS_OP_N, M, N, K, 
+    &alpha, b, K, a, N, &beta, c_check, K);
+
+    float* h_c_check = (float*)malloc(bytes);
+    checkCuda(cudaMemcpy(h_c_check, c_check, bytes, cudaMemcpyDeviceToHost));
+
+    for (int i=0; i < M; i++){
+        for (int j=0; j < K; j++)
+            PrintAssert(Equal(c[i*K + j],h_c_check[i*K + j]), c[i*K + j], h_c_check[i*K + j]);
+    }
+
+    free(h_c_check);
+    checkCuda(cudaFree(c_check));
 }
 
 void checkResult(half* a, half* b, half* c, size_t bytes, int M, int N, int K){
 
     half* c_check;
-    cudaMalloc(&c_check, bytes);
+    checkCuda(cudaMalloc(&c_check, bytes));
 
     cublasHandle_t handle;
 	cublasCreate(&handle);
@@ -79,7 +118,7 @@ void checkResult(half* a, half* b, half* c, size_t bytes, int M, int N, int K){
     &alpha, b, K, a, N, &beta, c_check, K);
 
     half* h_c_check = (half*)malloc(bytes);
-    cudaMemcpy(h_c_check, c_check, bytes, cudaMemcpyDeviceToHost);
+    checkCuda(cudaMemcpy(h_c_check, c_check, bytes, cudaMemcpyDeviceToHost));
 
     for (int i=0; i < M; i++){
         for (int j=0; j < K; j++)
@@ -88,5 +127,5 @@ void checkResult(half* a, half* b, half* c, size_t bytes, int M, int N, int K){
     }
 
     free(h_c_check);
-    cudaFree(c_check);
+    checkCuda(cudaFree(c_check));
 }

@@ -1,6 +1,5 @@
 #include <vector>
 #include <Eigen/Dense>
-using Eigen::MatrixXf;
 
 void matrix_init(float* a, int M, int N){
     // A(M,N)
@@ -28,9 +27,10 @@ static void PrintAssert(bool condition, float a, float b) {
 }
 
 void checkResult(float* a, float* b, float* c, int M, int N, int K){
-    MatrixXf a_e(M,N);
-    MatrixXf b_e(N,K);
-    MatrixXf c_e(M,K);
+    Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> a_e, b_e, c_e;
+    a_e.resize(M, N);
+    b_e.resize(N, K);
+    c_e.resize(M, K);
 
     for (int i = 0; i < M; ++i) {
         for (int j = 0; j < N; ++j) {

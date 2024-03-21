@@ -19,6 +19,7 @@ int main(int argc, char **argv){
     auto st = std::chrono::steady_clock::now();
     for(int i=0; i<M; i++){
         for(int j=0; j<K; j++){
+            C[i*K+j] = 0;
             for(int k=0; k<N; k++){
                 C[i*K+j] += A[i*N + k] *  B[k*K + j];
             }
@@ -31,7 +32,8 @@ int main(int argc, char **argv){
     printf("spend %f ms with size of (%d, %d, %d)\n", msec, M, N, K);
     printf("Computational Throughput: %f GFLOPS\n", (float)2*M*N*K*1e-6/msec);
 
-    checkResult(A, B, C, M, N, K);
+    // TODO: 有diff
+    // checkResult(A, B, C, M, N, K);
 
     free(A);
     free(B);

@@ -1,18 +1,22 @@
 #include <vector>
+#include <random>
 #include <Eigen/Dense>
+
+std::default_random_engine random_engine(0);
+std::uniform_real_distribution<float> uniform_dist(-256, 256);
 
 void matrix_init(float* a, int M, int N){
     // A(M,N)
     for(int i=0; i<M; i++){
         for(int j=0; j<N; j++){
-            a[i*N + j] = (float)(rand()) / (float)(rand());
+            a[i*N + j] = uniform_dist(random_engine);
         }
     }
 }
 
 void vector_init(std::vector<float> a, int M){
     for(int i=0; i<M; i++){
-        a[i] = (float)(rand()) / (float)(rand());
+        a[i] = uniform_dist(random_engine);
     } 
 }
 

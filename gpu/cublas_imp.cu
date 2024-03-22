@@ -47,7 +47,7 @@ int main(int argc, char** argv){
     float alpha = 1.0f;
 	float beta = 0.0f;
     int WARMUP_TIMES = 100;
-    for (int n_count=0;n_count<WARMUP_TIMES;n_count++){
+    for (int n_count=0; n_count < WARMUP_TIMES; n_count++){
         // c = (alpha*a) * b + (beta*c)
         cublasSgemm(handle, CUBLAS_OP_N, CUBLAS_OP_N, M, N, K, 
         &alpha, d_b, K, d_a, N, &beta, d_c, K);
@@ -60,8 +60,7 @@ int main(int argc, char** argv){
 
     cudaDeviceSynchronize();
     int EXECUTE_TIMES = 100;
-    for (int n_count=0;n_count<EXECUTE_TIMES;n_count++){
-        // c = (alpha*a) * b + (beta*c)
+    for (int n_count=0; n_count < EXECUTE_TIMES; n_count++){
         cublasSgemm(handle, CUBLAS_OP_N, CUBLAS_OP_N, M, N, K, 
         &alpha, d_b, K, d_a, N, &beta, d_c, K);
     }

@@ -19,16 +19,17 @@ int main(int argc, char** argv){
 
     size_t bytes_a = M * N * sizeof(half);
     size_t bytes_b = N * K * sizeof(half);
-    size_t bytes_c = M * K * sizeof(half);
+    size_t bytes_c = M * K * sizeof(float);
 
     half* h_a = (half*)malloc(bytes_a);
     half* h_b = (half*)malloc(bytes_b);
-    half* h_c = (half*)malloc(bytes_c);
+    float* h_c = (float*)malloc(bytes_c);
 
     matrix_init(h_a, M, N);
     matrix_init(h_b, N, K);
 
-    half *d_a, *d_b, *d_c;
+    half *d_a, *d_b;
+    float *d_c;
     checkCuda(cudaMalloc(&d_a, bytes_a));
     checkCuda(cudaMalloc(&d_b, bytes_b));
     checkCuda(cudaMalloc(&d_c, bytes_c));
@@ -44,13 +45,13 @@ int main(int argc, char** argv){
 
     cublasHandle_t handle;
 	cublasCreate(&handle);
-    __half alpha = 1.0f;
-	__half beta = 0.0f;
+    float alpha = 1.0f;
+	float beta = 0.0f;
     int WARMUP_TIMES = 100;
     for (int n_count=0;n_count<WARMUP_TIMES;n_count++){
-        // c = (alpha*a) * b + (beta*c)
-        cublasHgemm(handle, CUBLAS_OP_N, CUBLAS_OP_N, M, N, K, 
-        &alpha, d_b, K, d_a, N, &beta, d_c, K);
+        cublasGemmEx(handle, CUBLAS_OP_N, CUBLAS_OP_N, M, N, K, 
+        &alpha, d_b, CUDA_R_16F, K, d_a, CUDA_R_16F, N, &beta, d_c, 
+        CUDA_R_32F, K, CUDA_R_32F, static_cast<cublasGemmAlgo_t>(CUBLAS_GEMM_DEFAULT));
     }
 
     cudaEvent_t start, end;
@@ -61,9 +62,9 @@ int main(int argc, char** argv){
     cudaDeviceSynchronize();
     int EXECUTE_TIMES = 100;
     for (int n_count=0; n_count<EXECUTE_TIMES; n_count++){
-        // c = (alpha*a) * b + (beta*c)
-        cublasHgemm(handle, CUBLAS_OP_N, CUBLAS_OP_N, M, N, K, 
-        &alpha, d_b, K, d_a, N, &beta, d_c, K);
+        cublasGemmEx(handle, CUBLAS_OP_N, CUBLAS_OP_N, M, N, K, 
+        &alpha, d_b, CUDA_R_16F, K, d_a, CUDA_R_16F, N, &beta, d_c, 
+        CUDA_R_32F, K, CUDA_R_32F, static_cast<cublasGemmAlgo_t>(CUBLAS_GEMM_DEFAULT));
     }
     cudaDeviceSynchronize();
 

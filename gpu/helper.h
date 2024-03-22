@@ -48,13 +48,6 @@ static void PrintAssert(bool condition, float a, float b) {
     }
 }
 
-static void PrintAssert(bool condition, half a, half b) {
-    if (!condition) {
-        printf("%f is not equal to %f\n", __half2float(a), __half2float(b));
-    }
-}
-
-
 void checkResult(float* a, float* b, float* c, size_t bytes, int M, int N, int K){
 
     float* c_check;

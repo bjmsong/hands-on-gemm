@@ -1,38 +1,15 @@
 #include <cuda_runtime.h>
-#include "helper.h" 
+#include "../helper.h" 
 
-#define TILE_WIDTH 16 
-#define CORSE_FATOR 4
-__global__ void matrixMultipy(float*  a, float* b, float* c, int M, int N, int K){
-
-    __shared__ float Mds[TILE_WIDTH][TILE_WIDTH];
-    __shared__ float Nds[TILE_WIDTH][TILE_WIDTH];
-
-    // each thread calculate #CORSE_FATOR points of Matrix C
-    // (row, colStart), (row, colStart + TILE_WIDTH), ... (row, colStart + (CORSE_FATOR-1)*TILE_WIDTH)
+__global__ void matrixMultipy(float* a, float* b, float* c, int M, int N, int K){
     int row = blockIdx.y * blockDim.y + threadIdx.y;
-    int colStart = blockIdx.x * blockDim.x * CORSE_FATOR + threadIdx.x;
-
-    float temp[CORSE_FATOR];
-    for (int f = 0; f < CORSE_FATOR; f++){
-        temp[f] = 0.0f;
-    }
-    if(row < M && colStart < K){
-        for(int ph=0; ph<N/TILE_WIDTH; ph++){
-            // load by row
-            Mds[threadIdx.y][threadIdx.x] = a[row * N + ph * TILE_WIDTH + threadIdx.x];
-            // load by col
-            for (int f = 0; f < CORSE_FATOR; f++){
-                Nds[threadIdx.y][threadIdx.x] = b[(ph*TILE_WIDTH+threadIdx.y)*K + colStart + f * TILE_WIDTH];
-                __syncthreads();
-
-            for(int i = 0; i < TILE_WIDTH; i++)
-                temp[f] += Mds[threadIdx.y][i] * Nds[i][threadIdx.x];
-            __syncthreads();
+    int col = blockIdx.x * blockDim.x + threadIdx.x;
+    float temp = 0;
+    if (row < M && col < K){
+        for (int i=0; i<N; i++){
+            temp += a[row * N + i] * b[i * K + col];
         }
-        for (int f = 0; f < CORSE_FATOR; f++)
-            c[row*K + colStart + f * TILE_WIDTH] = temp[f];
-    }
+        c[row * K + col] = temp;
     }
 }
 
@@ -60,33 +37,36 @@ int main(int argc, char** argv){
     checkCuda(cudaMemcpy(d_a, h_a, bytes_a, cudaMemcpyHostToDevice));
     checkCuda(cudaMemcpy(d_b, h_b, bytes_b, cudaMemcpyHostToDevice));
 
-    int BLOCK_SIZE = TILE_WIDTH;
+    int BLOCK_SIZE = 16;
     int GRID_SIZE = (N + BLOCK_SIZE - 1) / BLOCK_SIZE;
 
-    dim3 grid(GRID_SIZE/CORSE_FATOR, GRID_SIZE);
+    dim3 grid(GRID_SIZE, GRID_SIZE);
     dim3 block(BLOCK_SIZE, BLOCK_SIZE);
     int WARMUP_TIMES = 100;
     for (int n_count=0; n_count < WARMUP_TIMES; n_count++){
         matrixMultipy<<<grid, block>>>(d_a, d_b, d_c, N, N, N);
     }
-    
+
     cudaEvent_t start, end;
     checkCuda(cudaEventCreate(&start));
     checkCuda(cudaEventCreate(&end));
     checkCuda(cudaEventRecord(start));
+
     cudaDeviceSynchronize();
     int EXECUTE_TIMES = 100;
-    for (int n_count=0;n_count<EXECUTE_TIMES;n_count++){
+    for (int n_count=0; n_count < EXECUTE_TIMES; n_count++){
         matrixMultipy<<<grid, block>>>(d_a, d_b, d_c, N, N, N);
     }
-    cudaDeviceSynchronize(); 
-    cudaEventRecord(end);
-    cudaEventSynchronize(end);
+    cudaDeviceSynchronize();
+
+    checkCuda(cudaEventRecord(end));
+    checkCuda(cudaEventSynchronize(end));
 
     float msec;
     cudaEventElapsedTime(&msec, start, end);
 
     checkCuda(cudaMemcpy(h_c, d_c, bytes_c, cudaMemcpyDeviceToHost));
+    // 有diff
     // checkResult(d_a, d_b, h_c, bytes_c, M, N, K);
 
     free(h_a);

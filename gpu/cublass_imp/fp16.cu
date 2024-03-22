@@ -1,7 +1,7 @@
 #include <iostream>
 #include <cuda_runtime.h>
 #include <cublas_v2.h>
-#include "helper.h" 
+#include "../helper.h" 
 
 int main(int argc, char** argv){
     int version;

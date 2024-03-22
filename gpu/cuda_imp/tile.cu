@@ -1,16 +1,32 @@
 #include <cuda_runtime.h>
-#include "helper.h" 
+#include "../helper.h" 
 
-__global__ void matrixMultipy(half* a, half* b, float* c, int M, int N, int K){
+#define TILE_WIDTH 16 
+__global__ void matrixMultipy(float* a, float* b, float* c, int M, int N, int K){
+
+    __shared__ float Mds[TILE_WIDTH][TILE_WIDTH];
+    __shared__ float Nds[TILE_WIDTH][TILE_WIDTH];
+
+    // each thread calculate (row, col) of Matrix C
     int row = blockIdx.y * blockDim.y + threadIdx.y;
     int col = blockIdx.x * blockDim.x + threadIdx.x;
+
     float temp = 0;
-    if (row < M && col < K){
-        for (int i=0; i<N; i++){
-            temp += __half2float(a[row * N + i]) * __half2float(b[i * K + col]);
+    if(row < M && col < K){
+        for(int ph=0; ph<N/TILE_WIDTH; ph++){
+            // load by row
+            Mds[threadIdx.y][threadIdx.x] = a[row * N + ph * TILE_WIDTH + threadIdx.x];
+            // load by col
+            Nds[threadIdx.y][threadIdx.x] = b[(ph*TILE_WIDTH+threadIdx.y)*K + col];
+            __syncthreads();
+    
+            for(int i = 0; i < TILE_WIDTH; i++)
+                temp += Mds[threadIdx.y][i] * Nds[i][threadIdx.x];
+            __syncthreads();
         }
-        c[row * K + col] = temp;
+        c[row*K + col] = temp;
     }
+
 }
 
 int main(int argc, char** argv){
@@ -18,19 +34,18 @@ int main(int argc, char** argv){
     int M = N;
     int K = N;
 
-    size_t bytes_a = M * N * sizeof(half);
-    size_t bytes_b = N * K * sizeof(half);
+    size_t bytes_a = M * N * sizeof(float);
+    size_t bytes_b = N * K * sizeof(float);
     size_t bytes_c = M * K * sizeof(float);
 
-    half* h_a = (half*)malloc(bytes_a);
-    half* h_b = (half*)malloc(bytes_b);
+    float* h_a = (float*)malloc(bytes_a);
+    float* h_b = (float*)malloc(bytes_b);
     float* h_c = (float*)malloc(bytes_c);
 
     matrix_init(h_a, M, N);
     matrix_init(h_b, N, K);
 
-    half *d_a, *d_b;
-    float *d_c;
+    float *d_a, *d_b, *d_c;
     checkCuda(cudaMalloc(&d_a, bytes_a));
     checkCuda(cudaMalloc(&d_b, bytes_b));
     checkCuda(cudaMalloc(&d_c, bytes_c));
@@ -38,7 +53,7 @@ int main(int argc, char** argv){
     checkCuda(cudaMemcpy(d_a, h_a, bytes_a, cudaMemcpyHostToDevice));
     checkCuda(cudaMemcpy(d_b, h_b, bytes_b, cudaMemcpyHostToDevice));
 
-    int BLOCK_SIZE = 16;
+    int BLOCK_SIZE = TILE_WIDTH;
     int GRID_SIZE = (N + BLOCK_SIZE - 1) / BLOCK_SIZE;
 
     dim3 grid(GRID_SIZE, GRID_SIZE);
@@ -52,15 +67,14 @@ int main(int argc, char** argv){
     checkCuda(cudaEventCreate(&start));
     checkCuda(cudaEventCreate(&end));
     checkCuda(cudaEventRecord(start));
-
     cudaDeviceSynchronize();
     int EXECUTE_TIMES = 100;
     for (int n_count=0;n_count<EXECUTE_TIMES;n_count++){
-        matrixMultipy<<<grid, block>>>(d_a, d_b, d_c, M, N, K);
+        matrixMultipy<<<grid, block>>>(d_a, d_b, d_c, N, N, N);
     }
     cudaDeviceSynchronize();
-
     checkCuda(cudaEventRecord(end));
+    checkCuda(cudaEventSynchronize(start));
     checkCuda(cudaEventSynchronize(end));
 
     float msec;

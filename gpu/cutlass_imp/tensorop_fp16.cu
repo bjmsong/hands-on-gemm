@@ -124,30 +124,23 @@ the output from CUTLASS kernel is same as reference GEMM kernel.
 
 #include "cutlass/cutlass.h"
 #include "cutlass/gemm/device/gemm.h"
+#include "cutlass/half.h"
 #include "cutlass/util/host_tensor.h"
 #include "cutlass/util/reference/device/gemm.h"
 #include "cutlass/util/reference/host/tensor_compare.h"
 #include "cutlass/util/reference/host/tensor_copy.h"
 #include "cutlass/util/reference/host/tensor_fill.h"
 #include "cutlass/util/tensor_view_io.h"
+#include "helper.h"
+#include "../helper.h"
 
-#define CUTLASS_CHECK(status)                                                                    \
-  {                                                                                              \
-    cutlass::Status error = status;                                                              \
-    if (error != cutlass::Status::kSuccess) {                                                    \
-      std::cerr << "Got cutlass error: " << cutlassGetStatusString(error) << " at: " << __LINE__ \
-                << std::endl;                                                                    \
-      exit(EXIT_FAILURE);                                                                        \
-    }                                                                                            \
-  }
-  
 // The code section below describes datatype for input, output matrices and computation between
 // elements in input matrices.
-using ElementAccumulator = int32_t;                 // <- data type of accumulator
+using ElementAccumulator = float;                 // <- data type of accumulator
 using ElementComputeEpilogue = ElementAccumulator;  // <- data type of epilogue operations
-using ElementInputA = int8_t;                       // <- data type of elements in input matrix A
-using ElementInputB = int8_t;                       // <- data type of elements in input matrix B
-using ElementOutput = int32_t;                      // <- data type of elements in output matrix D
+using ElementInputA = cutlass::half_t;                       // <- data type of elements in input matrix A
+using ElementInputB = cutlass::half_t;                       // <- data type of elements in input matrix B
+using ElementOutput = float;                      // <- data type of elements in output matrix D
 
 // The code section below describes matrix layout of input and output matrices. Row Major for
 // Matrix A, Column Major for Matrix B and Row Major for Matrix C
@@ -159,15 +152,15 @@ using LayoutOutput = cutlass::layout::RowMajor;
 using MMAOp = cutlass::arch::OpClassTensorOp;
 
 // This code section describes CUDA SM architecture number
-using SmArch = cutlass::arch::Sm75;
+using SmArch = cutlass::arch::Sm80;
 
 // This code section describes the tile size a thread block will compute
 using ShapeMMAThreadBlock =
-    cutlass::gemm::GemmShape<128, 256, 64>;  // <- threadblock tile M = 128, N = 256, K = 64
+    cutlass::gemm::GemmShape<128, 128, 16>;  // <- threadblock tile M = 128, N = 256, K = 64
 // This code section describes tile size a warp will compute
-using ShapeMMAWarp = cutlass::gemm::GemmShape<64, 64, 64>;  // <- warp tile M = 64, N = 64, K = 64 
+using ShapeMMAWarp = cutlass::gemm::GemmShape<64, 64, 16>;  // <- warp tile M = 64, N = 64, K = 64 
 // This code section describes the size of MMA op
-using ShapeMMAOp = cutlass::gemm::GemmShape<8, 8, 16>;  // <- MMA Op tile M = 8, N = 8, K = 16
+using ShapeMMAOp = cutlass::gemm::GemmShape<16, 8, 8>;  // <- MMA Op tile M = 8, N = 8, K = 16
 
 // This code section describes how threadblocks are scheduled on GPU
 using SwizzleThreadBlock = cutlass::gemm::threadblock::GemmIdentityThreadblockSwizzle<>;  // <- ??
@@ -201,11 +194,11 @@ using Gemm = cutlass::gemm::device::Gemm<ElementInputA,
                                          SwizzleThreadBlock,
                                          NumStages>;
 
-int run() {
+int run(int M, int N, int K) {
 
-  const int length_m = 5120;
-  const int length_n = 4096;
-  const int length_k = 4096;
+  const int length_m = M;
+  const int length_n = N;
+  const int length_k = K;
 
   // Create a tuple of problem size for matrix multiplication
   cutlass::gemm::GemmCoord problem_size(length_m, length_n, length_k);
@@ -290,8 +283,32 @@ int run() {
   CUTLASS_CHECK(status);
 
   // Launch initialized CUTLASS kernel
-  status = gemm_op();
+  int WARMUP_TIMES = 100;
+  for (int n_count=0; n_count < WARMUP_TIMES; n_count++){
+      status = gemm_op();
+  }
+
+  cudaEvent_t start, end;
+  checkCuda(cudaEventCreate(&start));
+  checkCuda(cudaEventCreate(&end));
+  checkCuda(cudaEventRecord(start));
+  cudaDeviceSynchronize();
+
+  int EXECUTE_TIMES = 100;
+  for (int n_count=0; n_count < EXECUTE_TIMES; n_count++){
+      status = gemm_op();
+  }
   CUTLASS_CHECK(status);
+  cudaDeviceSynchronize();
+  checkCuda(cudaEventRecord(end));
+  checkCuda(cudaEventSynchronize(start));
+  checkCuda(cudaEventSynchronize(end));
+
+  float msec;
+  cudaEventElapsedTime(&msec, start, end);
+
+  printf("spend %f ms with size of (%d, %d, %d)\n", msec/EXECUTE_TIMES, M, N, K);
+  printf("Computational Throughput: %f TFLOPS\n", (float)2*M*N*K*1e-9*EXECUTE_TIMES/msec);
 
   // Create instantiation for device reference gemm kernel
   cutlass::reference::device::Gemm<ElementInputA,
@@ -330,7 +347,11 @@ int run() {
   return (passed ? 0  : -1);
 }
 
-int main() {
+int main(int argc, char** argv) {
+  int N = std::atoi(argv[1]);
+  int M = N;
+  int K = N;
+
   bool notSupported = false;
 
   // Turing Tensor Core operations exposed with mma.sync and ldmatrix are first available
@@ -362,5 +383,5 @@ int main() {
     return 0;
   }
 
-  return run();
+  return run(M, N, K);
 }

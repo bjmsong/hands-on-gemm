@@ -4,7 +4,7 @@
 
 /*
 A(M, K) * B(K, N) = C(M, N)
-all matrices have column-major layout
+column-major
 */
 
 
@@ -39,7 +39,7 @@ cudaError_t CutlassSgemmNN(
                                                   ColumnMajor,  // Layout of B matrix
                                                   float,        // Data-type of C matrix
                                                   ColumnMajor>; // Layout of C matrix
-
+                                                                                                  
   // Define a CUTLASS GEMM type
   CutlassGemm gemm_operator;
 
@@ -52,7 +52,7 @@ cudaError_t CutlassSgemmNN(
   // The benefits of this pattern are (1.) a structured, composable strategy for passing host-constructible
   // arguments to kernels and (2.) minimized initialization overhead on kernel entry.
   //
-  CutlassGemm::Arguments args({M , N, K},  // Gemm Problem dimensions
+  CutlassGemm::Arguments args({M, N, K},  // Gemm Problem dimensions
                               {A, lda},    // Tensor-ref for source matrix A
                               {B, ldb},    // Tensor-ref for source matrix B
                               {C, ldc},    // Tensor-ref for source matrix C

@@ -154,6 +154,7 @@ using MMAOp = cutlass::arch::OpClassTensorOp;
 // This code section describes CUDA SM architecture number
 using SmArch = cutlass::arch::Sm80;
 
+// setting from: https://github.com/NVIDIA/cutlass/tree/main/examples/14_ampere_tf32_tensorop_gemm
 // This code section describes the tile size a thread block will compute
 using ShapeMMAThreadBlock =
     cutlass::gemm::GemmShape<128, 128, 16>;  // <- threadblock tile M = 128, N = 256, K = 64

@@ -4,6 +4,7 @@
         "-std=c++11",
         "-I${workspaceFolder}", // root dir
         "-I${workspaceFolder}/cpu",
+        "-I${workspaceFolder}/gpu",
         "-I/root/eigen-3.4.0",
         "-I/root/cutlass/include",
         "-I/usr/local/cuda-11.8/targets/x86_64-linux/include"

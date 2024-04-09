@@ -388,9 +388,9 @@ cudaError_t TestCutlassGemm(int M, int N, int K, float alpha, float beta) {
 }
 
 int main(int argc, char** argv){
-    int N = std::atoi(argv[1]);
-    int M = N;
-    int K = N;
+    int M = std::atoi(argv[1]);
+    int K = std::atoi(argv[2]);
+    int N = std::atoi(argv[3]);
 
     cudaError_t result = TestCutlassGemm(M, N, K, 1, 0);
     if (result == cudaSuccess) {

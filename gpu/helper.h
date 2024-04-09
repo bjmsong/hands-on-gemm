@@ -58,7 +58,7 @@ void checkResult(float* a, float* b, float* c, size_t bytes, int M, int N, int K
 	float alpha = 1.0f;
 	float beta = 0.0f;
     // Calculate: c = (alpha*a) * b + (beta*c)
-	cublasSgemm(handle, CUBLAS_OP_N, CUBLAS_OP_N, M, N, K, 
+	cublasSgemm(handle, CUBLAS_OP_N, CUBLAS_OP_N, K, M, N,  
     &alpha, b, K, a, N, &beta, c_check, K);
 
     float* h_c_check = (float*)malloc(bytes);
@@ -82,7 +82,7 @@ void checkResult(half* a, half* b, float* c, size_t bytes, int M, int N, int K){
 	cublasCreate(&handle);
 	float alpha = 1.0f;
 	float beta = 0.0f;
-	cublasGemmEx(handle, CUBLAS_OP_N, CUBLAS_OP_N, M, N, K, 
+	cublasGemmEx(handle, CUBLAS_OP_N, CUBLAS_OP_N, K, M, N,
     &alpha, b, CUDA_R_16F, K, a, CUDA_R_16F, N, &beta, c_check, CUDA_R_32F, K, CUDA_R_32F,
     static_cast<cublasGemmAlgo_t>(CUBLAS_GEMM_DEFAULT));
 

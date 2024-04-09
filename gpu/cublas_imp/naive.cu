@@ -13,9 +13,9 @@ int main(int argc, char** argv){
         return 1;
     }
 
-    int N = std::atoi(argv[1]);
-    int M = N;
-    int K = N;
+    int M = std::atoi(argv[1]);
+    int N = std::atoi(argv[2]);
+    int K = std::atoi(argv[3]);
 
     size_t bytes_a = M * N * sizeof(float);
     size_t bytes_b = N * K * sizeof(float);
@@ -49,7 +49,7 @@ int main(int argc, char** argv){
     int WARMUP_TIMES = 100;
     for (int n_count=0; n_count < WARMUP_TIMES; n_count++){
         // c = (alpha*a) * b + (beta*c)
-        cublasSgemm(handle, CUBLAS_OP_N, CUBLAS_OP_N, M, N, K, 
+        cublasSgemm(handle, CUBLAS_OP_N, CUBLAS_OP_N, K, M, N,
         &alpha, d_b, K, d_a, N, &beta, d_c, K);
     }
 
@@ -61,7 +61,7 @@ int main(int argc, char** argv){
     cudaDeviceSynchronize();
     int EXECUTE_TIMES = 100;
     for (int n_count=0; n_count < EXECUTE_TIMES; n_count++){
-        cublasSgemm(handle, CUBLAS_OP_N, CUBLAS_OP_N, M, N, K, 
+        cublasSgemm(handle, CUBLAS_OP_N, CUBLAS_OP_N, K, M, N, 
         &alpha, d_b, K, d_a, N, &beta, d_c, K);
     }
     cudaDeviceSynchronize();

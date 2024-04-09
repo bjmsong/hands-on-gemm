@@ -13,9 +13,9 @@ int main(int argc, char** argv){
         return 1;
     }
 
-    int N = std::atoi(argv[1]);
-    int M = N;
-    int K = N;
+    int M = std::atoi(argv[1]);
+    int N = std::atoi(argv[2]);
+    int K = std::atoi(argv[3]);
 
     size_t bytes_a = M * N * sizeof(half);
     size_t bytes_b = N * K * sizeof(half);
@@ -37,19 +37,13 @@ int main(int argc, char** argv){
     checkCuda(cudaMemcpy(d_a, h_a, bytes_a, cudaMemcpyHostToDevice));
     checkCuda(cudaMemcpy(d_b, h_b, bytes_b, cudaMemcpyHostToDevice));
 
-    int BLOCK_SIZE = 32;
-    int GRID_SIZE = (N + BLOCK_SIZE - 1) / BLOCK_SIZE;
-
-    dim3 grid(GRID_SIZE, GRID_SIZE);
-    dim3 block(BLOCK_SIZE, BLOCK_SIZE);
-
     cublasHandle_t handle;
 	cublasCreate(&handle);
     float alpha = 1.0f;
 	float beta = 0.0f;
     int WARMUP_TIMES = 100;
     for (int n_count=0;n_count<WARMUP_TIMES;n_count++){
-        cublasGemmEx(handle, CUBLAS_OP_N, CUBLAS_OP_N, M, N, K, 
+        cublasGemmEx(handle, CUBLAS_OP_N, CUBLAS_OP_N, K, M, N, 
         &alpha, d_b, CUDA_R_16F, K, d_a, CUDA_R_16F, N, &beta, d_c, 
         CUDA_R_32F, K, CUDA_R_32F, static_cast<cublasGemmAlgo_t>(CUBLAS_GEMM_DEFAULT));
     }
@@ -62,7 +56,7 @@ int main(int argc, char** argv){
     cudaDeviceSynchronize();
     int EXECUTE_TIMES = 100;
     for (int n_count=0; n_count<EXECUTE_TIMES; n_count++){
-        cublasGemmEx(handle, CUBLAS_OP_N, CUBLAS_OP_N, M, N, K, 
+        cublasGemmEx(handle, CUBLAS_OP_N, CUBLAS_OP_N, K, M, N, 
         &alpha, d_b, CUDA_R_16F, K, d_a, CUDA_R_16F, N, &beta, d_c, 
         CUDA_R_32F, K, CUDA_R_32F, static_cast<cublasGemmAlgo_t>(CUBLAS_GEMM_DEFAULT));
     }

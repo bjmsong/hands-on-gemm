@@ -20,6 +20,8 @@ import triton.language as tl
                       num_warps=2),
         triton.Config({'BLOCK_SIZE_M': 32, 'BLOCK_SIZE_N': 64, 'BLOCK_SIZE_K': 32, 'GROUP_SIZE_M': 8}, num_stages=5,
                       num_warps=2),
+        triton.Config({'BLOCK_SIZE_M': 64, 'BLOCK_SIZE_N': 32, 'BLOCK_SIZE_K': 128, 'GROUP_SIZE_M': 8}, num_stages=4,
+                      num_warps=4),
     ],
     key=['M', 'N', 'K'],
 )
@@ -145,8 +147,8 @@ else:
 
 @triton.testing.perf_report(
     triton.testing.Benchmark(
-        x_names=['M', 'N', 'K'],  # Argument names to use as an x-axis for the plot
-        x_vals=[128 * i for i in range(2, 33)],  # Different possible values for `x_name`
+        x_names=['K'],  # Argument names to use as an x-axis for the plot
+        x_vals=[8192],  # Different possible values for `x_name`
         line_arg='provider',  # Argument name whose value corresponds to a different line in the plot
         # Possible values for `line_arg`
         line_vals=['torch', 'triton'],
@@ -158,7 +160,8 @@ else:
         plot_name="matmul-performance",  # Name for the plot, used also as a file name for saving the plot.
         args={},
     ))
-def benchmark(M, N, K, provider):
+def benchmark(K, provider):
+    M = N = 512
     a = torch.randn((M, K), device='cuda', dtype=torch.float16)
     b = torch.randn((K, N), device='cuda', dtype=torch.float16)
     quantiles = [0.5, 0.2, 0.8]

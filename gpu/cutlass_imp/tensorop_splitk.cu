@@ -123,7 +123,7 @@ the output from CUTLASS kernel is same as reference GEMM kernel.
 #include <iostream>
 
 #include "cutlass/cutlass.h"
-#include "cutlass/gemm/device/gemm.h"
+#include "cutlass/gemm/device/gemm_splitk_parallel.h"
 #include "cutlass/half.h"
 #include "cutlass/util/host_tensor.h"
 #include "cutlass/util/reference/device/gemm.h"
@@ -154,17 +154,13 @@ using MMAOp = cutlass::arch::OpClassTensorOp;
 // This code section describes CUDA SM architecture number
 using SmArch = cutlass::arch::Sm80;
 
-// setting from: https://github.com/NVIDIA/cutlass/tree/main/examples/14_ampere_tf32_tensorop_gemm
 // This code section describes the tile size a thread block will compute
 using ShapeMMAThreadBlock =
-    cutlass::gemm::GemmShape<256, 128, 16>;  // <- threadblock tile M = 64, N = 32, K = 64
+    cutlass::gemm::GemmShape<128, 64, 32>;  // <- threadblock tile M = 64, N = 32, K = 64
 // This code section describes tile size a warp will compute
-using ShapeMMAWarp = cutlass::gemm::GemmShape<64, 64, 16>;  // <- warp tile M = 32, N = 16, K = 64 
+using ShapeMMAWarp = cutlass::gemm::GemmShape<64, 32, 16>;  // <- warp tile M = 32, N = 16, K = 64 
 // This code section describes the size of MMA op
 using ShapeMMAOp = cutlass::gemm::GemmShape<16, 8, 8>;  // <- MMA Op tile M = 16, N = 8, K = 8
-
-// This code section describes how threadblocks are scheduled on GPU
-using SwizzleThreadBlock = cutlass::gemm::threadblock::GemmIdentityThreadblockSwizzle<>;  // <- ??
 
 // This code section describes the epilogue part of the kernel
 using EpilogueOp = cutlass::epilogue::thread::LinearCombination<
@@ -176,10 +172,9 @@ using EpilogueOp = cutlass::epilogue::thread::LinearCombination<
     ElementAccumulator,                                // <- data type of accumulator
     ElementComputeEpilogue>;  // <- data type for alpha/beta in linear combination function
 
-// Number of pipelines you want to use
-constexpr int NumStages = 3;
 
-using Gemm = cutlass::gemm::device::Gemm<ElementInputA,
+// Number of pipelines you want to use
+using Gemm = cutlass::gemm::device::GemmSplitKParallel<ElementInputA,
                                          LayoutInputA,
                                          ElementInputB,
                                          LayoutInputB,
@@ -191,9 +186,7 @@ using Gemm = cutlass::gemm::device::Gemm<ElementInputA,
                                          ShapeMMAThreadBlock,
                                          ShapeMMAWarp,
                                          ShapeMMAOp,
-                                         EpilogueOp,
-                                         SwizzleThreadBlock,
-                                         NumStages>;
+                                         EpilogueOp>;
 
 int run(int M, int N, int K) {
 
@@ -254,7 +247,7 @@ int run(int M, int N, int K) {
   ElementComputeEpilogue beta = ElementComputeEpilogue(0);
 
   // Split K dimension into 1 partitions
-  int split_k_slices = 1;
+  int split_k_slices = 8;
 
   // Create a tuple of gemm kernel arguments. This is later passed as arguments to launch
   // instantiated CUTLASS kernel

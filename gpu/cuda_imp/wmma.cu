@@ -85,9 +85,9 @@ void launch_wmma_mm(half* a, half* b, float* c, uint32_t M, uint32_t N, uint32_t
 }
 
 int main(int argc, char** argv){
-    int N = std::atoi(argv[1]);
-    int M = N;
-    int K = N;
+    int M = std::atoi(argv[1]);
+    int N = std::atoi(argv[2]);
+    int K = std::atoi(argv[3]);
 
     size_t bytes_a = M * N * sizeof(half);
     size_t bytes_b = N * K * sizeof(half);
@@ -111,7 +111,7 @@ int main(int argc, char** argv){
 
     int WARMUP_TIMES = 100;
     for (int n_count=0; n_count < WARMUP_TIMES; n_count++){
-        launch_wmma_mm(d_a, d_b, d_c, N, N, N);
+        launch_wmma_mm(d_a, d_b, d_c, M, N, K);
     }
     
     cudaEvent_t start, end;
@@ -121,7 +121,7 @@ int main(int argc, char** argv){
     cudaDeviceSynchronize();
     int EXECUTE_TIMES = 100;
     for (int n_count=0; n_count < EXECUTE_TIMES; n_count++){
-        launch_wmma_mm(d_a, d_b, d_c, N, N, N);
+        launch_wmma_mm(d_a, d_b, d_c, M, N, K);
     }
     cudaDeviceSynchronize();
     checkCuda(cudaEventRecord(end));

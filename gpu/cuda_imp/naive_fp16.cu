@@ -14,9 +14,9 @@ __global__ void matrixMultipy(half* a, half* b, float* c, int M, int N, int K){
 }
 
 int main(int argc, char** argv){
-    int N = std::atoi(argv[1]);
-    int M = N;
-    int K = N;
+    int M = std::atoi(argv[1]);
+    int N = std::atoi(argv[2]);
+    int K = std::atoi(argv[3]);
 
     size_t bytes_a = M * N * sizeof(half);
     size_t bytes_b = N * K * sizeof(half);
@@ -39,13 +39,14 @@ int main(int argc, char** argv){
     checkCuda(cudaMemcpy(d_b, h_b, bytes_b, cudaMemcpyHostToDevice));
 
     int BLOCK_SIZE = 16;
-    int GRID_SIZE = (N + BLOCK_SIZE - 1) / BLOCK_SIZE;
+    int GRID_SIZE_X = (M + BLOCK_SIZE - 1) / BLOCK_SIZE;
+    int GRID_SIZE_Y = (K + BLOCK_SIZE - 1) / BLOCK_SIZE;
 
     dim3 grid(GRID_SIZE, GRID_SIZE);
-    dim3 block(BLOCK_SIZE, BLOCK_SIZE);
+    dim3 block(GRID_SIZE_X, GRID_SIZE_Y);
     int WARMUP_TIMES = 100;
     for (int n_count=0; n_count < WARMUP_TIMES; n_count++){
-        matrixMultipy<<<grid, block>>>(d_a, d_b, d_c, N, N, N);
+        matrixMultipy<<<grid, block>>>(d_a, d_b, d_c, M, N, K);
     }
     
     cudaEvent_t start, end;

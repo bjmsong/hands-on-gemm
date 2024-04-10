@@ -157,9 +157,9 @@ using SmArch = cutlass::arch::Sm80;
 // setting from: https://github.com/NVIDIA/cutlass/tree/main/examples/14_ampere_tf32_tensorop_gemm
 // This code section describes the tile size a thread block will compute
 using ShapeMMAThreadBlock =
-    cutlass::gemm::GemmShape<256, 128, 16>;  // <- threadblock tile M = 64, N = 32, K = 64
+    cutlass::gemm::GemmShape<256, 128, 16>;  // <- threadblock tile M = 256, N = 128, K = 16
 // This code section describes tile size a warp will compute
-using ShapeMMAWarp = cutlass::gemm::GemmShape<64, 64, 16>;  // <- warp tile M = 32, N = 16, K = 64 
+using ShapeMMAWarp = cutlass::gemm::GemmShape<64, 64, 16>;  // <- warp tile M = 64, N = 64, K = 16 
 // This code section describes the size of MMA op
 using ShapeMMAOp = cutlass::gemm::GemmShape<16, 8, 8>;  // <- MMA Op tile M = 16, N = 8, K = 8
 

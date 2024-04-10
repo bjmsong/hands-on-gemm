@@ -39,11 +39,11 @@ int main(int argc, char** argv){
     checkCuda(cudaMemcpy(d_b, h_b, bytes_b, cudaMemcpyHostToDevice));
 
     int BLOCK_SIZE = 16;
-    int GRID_SIZE_X = (M + BLOCK_SIZE - 1) / BLOCK_SIZE;
-    int GRID_SIZE_Y = (K + BLOCK_SIZE - 1) / BLOCK_SIZE;
+    int GRID_SIZE_X = (K + BLOCK_SIZE - 1) / BLOCK_SIZE;
+    int GRID_SIZE_Y = (M + BLOCK_SIZE - 1) / BLOCK_SIZE;
 
-    dim3 grid(GRID_SIZE, GRID_SIZE);
-    dim3 block(GRID_SIZE_X, GRID_SIZE_Y);
+    dim3 grid(GRID_SIZE_X, GRID_SIZE_Y);
+    dim3 block(BLOCK_SIZE, BLOCK_SIZE);
     int WARMUP_TIMES = 100;
     for (int n_count=0; n_count < WARMUP_TIMES; n_count++){
         matrixMultipy<<<grid, block>>>(d_a, d_b, d_c, M, N, K);

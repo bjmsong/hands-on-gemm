@@ -12,21 +12,26 @@ __global__ void matrixMultipy(float* a, float* b, float* c, int M, int N, int K)
     int col = blockIdx.x * blockDim.x + threadIdx.x;
 
     float temp = 0;
-    if(row < M && col < K){
-        for(int ph=0; ph<N/TILE_WIDTH; ph++){
-            // load by row
+    for(int ph=0; ph<N/TILE_WIDTH; ph++){
+        // load by row
+        if((row < M) && (ph*TILE_WIDTH + threadIdx.x) < N)
             Mds[threadIdx.y][threadIdx.x] = a[row * N + ph * TILE_WIDTH + threadIdx.x];
-            // load by col
+        else
+            Mds[threadIdx.y][threadIdx.x] = 0.0f;
+        // load by col
+        if((col < K) && (ph*TILE_WIDTH + threadIdx.y) < N)
             Nds[threadIdx.y][threadIdx.x] = b[(ph*TILE_WIDTH+threadIdx.y)*K + col];
-            __syncthreads();
-    
-            for(int i = 0; i < TILE_WIDTH; i++)
-                temp += Mds[threadIdx.y][i] * Nds[i][threadIdx.x];
-            __syncthreads();
-        }
+        else
+            Nds[threadIdx.y][threadIdx.x] = 0.0f;
+        __syncthreads();
+
+        for(int i = 0; i < TILE_WIDTH; i++)
+            temp += Mds[threadIdx.y][i] * Nds[i][threadIdx.x];
+        __syncthreads();
+    }
+    if ((row < M) && (col < K)){
         c[row*K + col] = temp;
     }
-
 }
 
 int main(int argc, char** argv){
@@ -54,9 +59,10 @@ int main(int argc, char** argv){
     checkCuda(cudaMemcpy(d_b, h_b, bytes_b, cudaMemcpyHostToDevice));
 
     int BLOCK_SIZE = TILE_WIDTH;
-    int GRID_SIZE = (N + BLOCK_SIZE - 1) / BLOCK_SIZE;
+    int GRID_SIZE_X = (K + BLOCK_SIZE - 1) / BLOCK_SIZE;
+    int GRID_SIZE_Y = (M + BLOCK_SIZE - 1) / BLOCK_SIZE;
 
-    dim3 grid(GRID_SIZE, GRID_SIZE);
+    dim3 grid(GRID_SIZE_X, GRID_SIZE_Y);
     dim3 block(BLOCK_SIZE, BLOCK_SIZE);
     int WARMUP_TIMES = 100;
     for (int n_count=0; n_count < WARMUP_TIMES; n_count++){

@@ -1,6 +1,8 @@
 #include <cuda_runtime.h>
 #include "../helper.h" 
 
+// Unified Memory 不影响性能
+
 __global__ void matrixMultipy(float* a, float* b, float* c, int M, int N, int K){
     int row = blockIdx.y * blockDim.y + threadIdx.y;
     int col = blockIdx.x * blockDim.x + threadIdx.x;
@@ -30,12 +32,12 @@ int main(int argc, char** argv){
     matrix_init(h_b, N, K);
 
     float *d_a, *d_b, *d_c;
-    checkCuda(cudaMalloc(&d_a, bytes_a));
-    checkCuda(cudaMalloc(&d_b, bytes_b));
-    checkCuda(cudaMalloc(&d_c, bytes_c));
-
-    checkCuda(cudaMemcpy(d_a, h_a, bytes_a, cudaMemcpyHostToDevice));
-    checkCuda(cudaMemcpy(d_b, h_b, bytes_b, cudaMemcpyHostToDevice));
+    checkCuda(cudaMallocManaged((void **)&d_a, bytes_a));
+    checkCuda(cudaMallocManaged((void **)&d_b, bytes_b));
+    checkCuda(cudaMallocManaged((void **)&d_c, bytes_c));
+    
+    matrix_init(d_a, M, N);
+    matrix_init(d_b, N, K);
 
     int BLOCK_SIZE = 16;
     int GRID_SIZE_X = (K + BLOCK_SIZE - 1) / BLOCK_SIZE;
@@ -66,9 +68,8 @@ int main(int argc, char** argv){
     float msec;
     cudaEventElapsedTime(&msec, start, end);
 
-    checkCuda(cudaMemcpy(h_c, d_c, bytes_c, cudaMemcpyDeviceToHost));
     // 有diff
-    // checkResult(d_a, d_b, h_c, bytes_c, M, N, K);
+    // checkResult(d_a, d_b, d_c, bytes_c, M, N, K);
 
     free(h_a);
     free(h_b);

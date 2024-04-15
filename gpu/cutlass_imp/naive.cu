@@ -24,13 +24,7 @@ cudaError_t CutlassSgemmNN(
 
   // Define type definition for single-precision CUTLASS GEMM with column-major
   // input matrices and 128x128x8 threadblock tile size (chosen by default).
-  //
-  // To keep the interface manageable, several helpers are defined for plausible compositions
-  // including the following example for single-precision GEMM. Typical values are used as
-  // default template arguments. See `cutlass/gemm/device/default_gemm_configuration.h` for more details.
-  //
-  // To view the full gemm device API interface, see `cutlass/gemm/device/gemm.h`
-
+  
   using ColumnMajor = cutlass::layout::ColumnMajor;
 
   using CutlassGemm = cutlass::gemm::device::Gemm<float,        // Data-type of A matrix
@@ -65,15 +59,10 @@ cudaError_t CutlassSgemmNN(
   
   cutlass::Status status = gemm_operator(args);
 
-  //
-  // Return a cudaError_t if the CUTLASS GEMM operator returned an error code.
-  //
-
   if (status != cutlass::Status::kSuccess) {
     return cudaErrorUnknown;
   }
 
-  // Return success, if no errors were encountered.
   return cudaSuccess;
 }
 

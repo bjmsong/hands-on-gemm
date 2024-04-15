@@ -1,4 +1,4 @@
-## Testbed
+# Testbed
 - RTX 4090
 - CUDA 12.1
 - CUTLASS 3.4.1
@@ -7,9 +7,8 @@
 - Execution : 100 times 
 - DataType: fp32 + fp16
 
-## Performance
-- M=K=N=8192
-![](./gpu/performance/1.png)
+# Performance
 
-- M=N=512，K=8192
-![](./gpu/performance/2.png)
+<p align="center"><img src=gpu/performance/1.png></p>
+
+<p align="center"><img src=gpu/performance/2.png></p>

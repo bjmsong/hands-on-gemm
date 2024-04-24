@@ -156,7 +156,7 @@ int run(int M, int N, int K) {
   ElementComputeEpilogue beta = ElementComputeEpilogue(0);
 
   // Split K dimension into 1 partitions
-  int split_k_slices = 8;
+  int split_k_slices = 4;
 
   // Create a tuple of gemm kernel arguments. This is later passed as arguments to launch
   // instantiated CUTLASS kernel

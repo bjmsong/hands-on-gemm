@@ -85,7 +85,7 @@ using EpilogueOp = cutlass::epilogue::thread::LinearCombination<
     ElementComputeEpilogue>;  // <- data type for alpha/beta in linear combination function
 
 // Number of pipelines you want to use
-constexpr int NumStages = 3;
+constexpr int NumStages = 1;
 
 using Gemm = cutlass::gemm::device::Gemm<ElementInputA,
                                          LayoutInputA,

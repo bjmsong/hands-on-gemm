@@ -2,6 +2,7 @@ import torch
 import triton
 import triton.language as tl
 
+# triton 3.0 使用fp32类型报错，因此也会使用tensor core了
 @triton.autotune(
     configs=[
         triton.Config({'BLOCK_SIZE_M': 128, 'BLOCK_SIZE_N': 256, 'BLOCK_SIZE_K': 64, 'GROUP_SIZE_M': 8}, num_stages=3,
@@ -122,8 +123,8 @@ def matmul(a, b):
 
 torch.manual_seed(0)
 M = N = K = 256
-a = torch.randn((M, N), device='cuda', dtype=torch.float32)
-b = torch.randn((N, K), device='cuda', dtype=torch.float32)
+a = torch.randn((M, N), device='cuda', dtype=torch.float16)
+b = torch.randn((N, K), device='cuda', dtype=torch.float16)
 # start_time = time.time()
 triton_output = matmul(a, b)
 # end_time = time.time()
@@ -161,8 +162,8 @@ else:
     ))
 def benchmark(K, provider):
     M = N = 512
-    a = torch.randn((M, K), device='cuda', dtype=torch.float32)
-    b = torch.randn((K, N), device='cuda', dtype=torch.float32)
+    a = torch.randn((M, K), device='cuda', dtype=torch.float16)
+    b = torch.randn((K, N), device='cuda', dtype=torch.float16)
     quantiles = [0.5, 0.2, 0.8]
     if provider == 'torch':
         # 对每个kernel进行25次的warm_up和100次iteration

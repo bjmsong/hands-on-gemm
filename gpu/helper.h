@@ -20,6 +20,17 @@ void check(cudaError_t err, const char* const func, const char* const file,
     }
 }
 
+#define checkcuBLAS(val) checkcublas((val), #val, __FILE__, __LINE__)
+void checkcublas(cublasStatus_t status, const char* const func, const char* const file,
+           const int line)
+{
+    if (status != CUBLAS_STATUS_SUCCESS)
+    {
+        std::cerr << "[cuBLAS ERROR]: " << status << " " << file << " " << line << std::endl;
+        std::exit(EXIT_FAILURE);
+    }
+}
+
 void matrix_init(float* a, int M, int N){
     // A(M,N)
     for(int i=0; i<M; i++){

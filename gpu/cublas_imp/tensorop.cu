@@ -81,4 +81,6 @@ int main(int argc, char** argv){
     checkCuda(cudaFree(d_a));
     checkCuda(cudaFree(d_b));
     checkCuda(cudaFree(d_c));
+
+    checkcuBLAS(cublasDestroy(handle));
 }

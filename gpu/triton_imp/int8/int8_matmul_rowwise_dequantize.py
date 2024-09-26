@@ -1,6 +1,3 @@
-# https://github.com/bitsandbytes-foundation/bitsandbytes/blob/main/bitsandbytes/triton/int8_matmul_rowwise_dequantize.py
-
-
 import torch
 import triton
 import triton.language as tl

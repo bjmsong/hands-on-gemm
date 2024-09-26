@@ -19,16 +19,33 @@
 //     ]
 // }
 
+// {
+//     "version": "0.2.0",
+//     "configurations": [
+//         {
+//             "type": "cuda-gdb",
+//             "request": "launch",
+//             "name": "CUDA C++: Launch",
+//             "cwd": "${workspaceFolder}",
+//             "program": "${workspaceFolder}/a.out",
+//             "args": "16 16 16"
+//         }
+//     ]
+// }
+
 {
     "version": "0.2.0",
     "configurations": [
         {
-            "type": "cuda-gdb",
+            "python": "/root/miniconda3/bin/python",
+            "name": "Python: 当前文件",
+            "type": "python",
             "request": "launch",
-            "name": "CUDA C++: Launch",
-            "cwd": "${workspaceFolder}",
-            "program": "${workspaceFolder}/a.out",
-            "args": "16"
+            "program": "gpu/triton_imp/int8/main.py",
+            "console": "integratedTerminal",
+            "justMyCode": false,
+            "args": [
+            ]
         }
     ]
 }

@@ -14,11 +14,11 @@ def matmul(X, W):
     return int8_matmul_rowwise_dequantize(X_int8, W_int8.t(), state_X, state_W, bias = None)
 
 torch.manual_seed(0)
-# M, N, K = 32, 256, 1024
-# a = torch.randn((M, N), device='cuda', dtype=torch.float16)
-# b = torch.randn((N, K), device='cuda', dtype=torch.float16)
-a = torch.tensor([[0.1,0.2],[0.3,0.4]], device='cuda', dtype=torch.float16)
-b = torch.tensor([[0.1,0.3],[0.2,0.4]], device='cuda', dtype=torch.float16)
+M, N, K = 32, 256, 1024
+a = torch.randn((M, N), device='cuda', dtype=torch.float16)
+b = torch.randn((K, N), device='cuda', dtype=torch.float16)
+# a = torch.tensor([[0.1,0.2],[0.3,0.4]], device='cuda', dtype=torch.float16)
+# b = torch.tensor([[0.1,0.3],[0.2,0.4]], device='cuda', dtype=torch.float16)
 triton_output = matmul(a, b)
 torch_output = torch.matmul(a, b.t())
 print(f"triton_output={triton_output}")

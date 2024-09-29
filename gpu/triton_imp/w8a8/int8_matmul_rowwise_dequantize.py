@@ -196,3 +196,7 @@ def int8_matmul_rowwise_dequantize(a, b, state_x, state_w, bias):
         ACC_TYPE=ACC_TYPE,
     )
     return c
+
+
+if __name__ == "__main__":
+    pass

@@ -6,11 +6,14 @@ from bitsandbytes.triton.triton_utils import is_triton_available
 
 if not is_triton_available():
 
-    def dequantize_rowwise(x: torch.Tensor, state_x: torch.Tensor):
+    def quantize_rowwise(x: torch.Tensor):
         return None
 else:
     import triton
     import triton.language as tl
+
+    # import os
+    # os.environ["TRITON_INTERPRET"]= "1"
 
     # rowwise quantize
 
@@ -33,11 +36,10 @@ else:
         key=["n_elements"],
     )
     @triton.jit
-    def _dequantize_rowwise(
+    def _quantize_rowwise(
         x_ptr,
-        state_x,
         output_ptr,
-        inv_127,
+        output_maxs,
         n_elements,
         BLOCK_SIZE: tl.constexpr,
         P2: tl.constexpr,
@@ -48,17 +50,21 @@ else:
         offsets = block_start + arange
         row_mask = arange < BLOCK_SIZE
         x = tl.load(x_ptr + offsets, mask=row_mask)
-        max_val = tl.load(state_x + pid)
-        output = max_val * x * inv_127
+
+        abs_x = tl.abs(x)
+        max_val = tl.max(tl.where(row_mask, abs_x, 0), axis=0)
+        output = tl.extra.cuda.libdevice.rint(127.0 * (x / max_val))  # 对浮点数四舍五入到最近的整数
         tl.store(output_ptr + offsets, output, mask=row_mask)
+        tl.store(output_maxs + pid, max_val)
 
-    def dequantize_rowwise(x: torch.Tensor, state_x: torch.Tensor):
-        output = torch.empty(*x.shape, device=x.device, dtype=torch.bfloat16)
+    def quantize_rowwise(x: torch.Tensor):
+        output = torch.empty(*x.shape, device=x.device, dtype=torch.int8)
+        output_maxs = torch.empty(x.shape[0], device=x.device, dtype=torch.bfloat16) # max value by row
 
-        P2 = int(2 ** (math.ceil(math.log2(x.shape[1]))))
+        P2 = int(2 ** (math.ceil(math.log2(x.shape[1]))))  # 找到大于或等于 x.shape[1] 的最小的 2 的幂
 
         assert x.is_cuda and output.is_cuda
         n_elements = output.numel()
-        grid = lambda meta: (x.shape[0],)
-        _dequantize_rowwise[grid](x, state_x, output, 1.0 / 127, n_elements, BLOCK_SIZE=x.shape[1], P2=P2)
-        return output
+        grid = lambda meta: (x.shape[0],)  # 1 block process 1 row data
+        _quantize_rowwise[grid](x, output, output_maxs, n_elements, BLOCK_SIZE=x.shape[1], P2=P2)
+        return output, output_maxs

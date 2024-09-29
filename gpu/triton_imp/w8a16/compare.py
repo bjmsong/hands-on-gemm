@@ -325,7 +325,7 @@ for D in [2**6, 2**7, 2**8, 2**9, 2**10, 2**11]: #, 2**10, 2**12, 2**14]:
             if t_w:
                 w_int8 = w_int8.t().contiguous().t()
 
-            scale = torch.randn(N, dtype=torch.bfloat16).cuda()
+            scale = torch.randn(N, dtype=torch.bfloat16).cuda()   # scale by column
             print("triton matmul")
             try:
                 triton_matmul(x, w_int8)

@@ -1,8 +1,10 @@
+# from Triton Tutorial
+
+import itertools
 import torch
 import triton
 import triton.language as tl
 
-# triton 3.0 使用fp32类型报错，因此也会使用tensor core了
 @triton.autotune(
     configs=[
         triton.Config({'BLOCK_SIZE_M': 128, 'BLOCK_SIZE_N': 256, 'BLOCK_SIZE_K': 64, 'GROUP_SIZE_M': 8}, num_stages=3,
@@ -22,7 +24,7 @@ import triton.language as tl
         triton.Config({'BLOCK_SIZE_M': 32, 'BLOCK_SIZE_N': 64, 'BLOCK_SIZE_K': 32, 'GROUP_SIZE_M': 8}, num_stages=5,
                       num_warps=2),
     ],
-    key=['M', 'N', 'K'],
+    key=['M', 'N', 'K'],  #  whose change in value will trigger the evaluation of all provided configs
 )
 @triton.jit
 def matmul_kernel(
@@ -86,7 +88,7 @@ def matmul_kernel(
         # Advance the ptrs to the next K block.
         a_block_ptr = tl.advance(a_block_ptr, (0, BLOCK_SIZE_K))
         b_block_ptr = tl.advance(b_block_ptr, (BLOCK_SIZE_K, 0))
-    c = accumulator.to(tl.float32)
+    c = accumulator.to(tl.float16)
 
     # -----------------------------------------------------------
     # Write back the block of the output matrix C with masks.
@@ -144,11 +146,13 @@ else:
 # Benchmark
 # ---------
 
+M_range = [2 ** i for i in range(0, 15, 2)]
+N_K_range = [2 ** i for i in range(10, 15, 2)]
+matrix_range = list(itertools.product(M_range, N_K_range, N_K_range))
 @triton.testing.perf_report(
     triton.testing.Benchmark(
-        x_names=['K'],  # Argument names to use as an x-axis for the plot
-        # x_vals=[128 * i for i in range(2, 33)],  # Different possible values for `x_name`
-        x_vals=[8192],
+        x_names=['M', 'N', 'K'],  # Argument names to use as an x-axis for the plot
+        x_vals=[list(_) for _ in matrix_range],  # Different possible values for `x_name`
         line_arg='provider',  # Argument name whose value corresponds to a different line in the plot
         # Possible values for `line_arg`
         line_vals=['torch', 'triton'],
@@ -160,17 +164,16 @@ else:
         plot_name="matmul-performance",  # Name for the plot, used also as a file name for saving the plot.
         args={},
     ))
-def benchmark(K, provider):
-    M = N = 512
+def benchmark(M, N, K, provider):
     a = torch.randn((M, K), device='cuda', dtype=torch.float16)
     b = torch.randn((K, N), device='cuda', dtype=torch.float16)
     quantiles = [0.5, 0.2, 0.8]
     if provider == 'torch':
-        # 对每个kernel进行25次的warm_up和100次iteration
+        # default: 对每个kernel进行25次的warm_up和100次iteration
         ms, min_ms, max_ms = triton.testing.do_bench(lambda: torch.matmul(a, b), quantiles=quantiles)
     if provider == 'triton':
         ms, min_ms, max_ms = triton.testing.do_bench(lambda: matmul(a, b), quantiles=quantiles)
     perf = lambda ms: 2 * M * N * K * 1e-9 / ms
     return perf(ms), perf(max_ms), perf(min_ms)
 
-benchmark.run(show_plots=True, print_data=True)
+benchmark.run(show_plots=True, print_data=True, save_path="plot/")

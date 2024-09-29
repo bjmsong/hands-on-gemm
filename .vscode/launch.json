@@ -41,7 +41,7 @@
             "name": "Python: 当前文件",
             "type": "python",
             "request": "launch",
-            "program": "gpu/triton_imp/int8/main.py",
+            "program": "gpu/triton_imp/w8a16.py",
             "console": "integratedTerminal",
             "justMyCode": false,
             "args": [

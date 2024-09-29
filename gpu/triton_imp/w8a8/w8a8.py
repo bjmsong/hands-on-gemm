@@ -1,6 +1,6 @@
 # https://github.com/bitsandbytes-foundation/bitsandbytes/blob/main/bitsandbytes
-# TODO: slower than fp16
 
+import itertools
 import torch
 import triton
 from quantize_rowwise import quantize_rowwise
@@ -28,11 +28,15 @@ if torch.allclose(triton_output, torch_output, atol=1e-2, rtol=1e-2):
 else:
     print("❌ Triton and Torch differ")
 
+# M_range = [2 ** i for i in range(0, 15, 2)]
+# N_K_range = [2 ** i for i in range(10, 15, 2)]
+M_range = [2 ** 14]
+N_K_range = [2 ** i for i in range(14, 16, 2)]
+matrix_range = list(itertools.product(M_range, N_K_range, N_K_range))
 @triton.testing.perf_report(
     triton.testing.Benchmark(
-        x_names=['K'],  # Argument names to use as an x-axis for the plot
-        # x_vals=[128 * i for i in range(2, 33)],  # Different possible values for `x_name`
-        x_vals=[8192],
+        x_names=['M', 'N', 'K'],  # Argument names to use as an x-axis for the plot
+        x_vals=[list(_) for _ in matrix_range],  # Different possible values for `x_name`
         line_arg='provider',  # Argument name whose value corresponds to a different line in the plot
         # Possible values for `line_arg`
         line_vals=['torch', 'triton'],
@@ -44,8 +48,7 @@ else:
         plot_name="matmul-performance",  # Name for the plot, used also as a file name for saving the plot.
         args={},
     ))
-def benchmark(K, provider):
-    M = N = 512
+def benchmark(M, N, K, provider):
     a = torch.randn((M, K), device='cuda', dtype=torch.float16)
     b = torch.randn((N, K), device='cuda', dtype=torch.float16)
     quantiles = [0.5, 0.2, 0.8]
@@ -57,4 +60,4 @@ def benchmark(K, provider):
     perf = lambda ms: 2 * M * N * K * 1e-9 / ms
     return perf(ms), perf(max_ms), perf(min_ms)
 
-benchmark.run(show_plots=True, print_data=True)
+benchmark.run(show_plots=True, print_data=True, save_path="plot/")

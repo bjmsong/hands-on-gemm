@@ -125,8 +125,7 @@ def _int8_matmul_rowwise_dequantize(
     w_factor = tl.load(state_w_ptr + rbn)[None, :]
     x_factor = tl.load(state_x_ptr + ram)[:, None]
 
-    # acc = tl.zeros((BLOCK_M, BLOCK_N), dtype=ACC_TYPE)
-    acc = tl.zeros((BLOCK_M, BLOCK_N), dtype=tl.float32)
+    acc = tl.zeros((BLOCK_M, BLOCK_N), dtype=ACC_TYPE)
     for k in range(0, tl.cdiv(K, BLOCK_K * SPLIT_K)):
         if EVEN_K:
             a = tl.load(A)
@@ -140,7 +139,7 @@ def _int8_matmul_rowwise_dequantize(
         B += BLOCK_K * SPLIT_K * stride_bk
 
     acc = w_factor * (x_factor * (acc * divfactor))
-    # acc = acc.to(C.dtype.element_ty)
+    acc = acc.to(C.dtype.element_ty)
 
     if has_bias:
         bias = tl.load(bias + rn).to(C.dtype.element_ty)
@@ -170,7 +169,7 @@ def int8_matmul_rowwise_dequantize(a, b, state_x, state_w, bias):
     M, K = a.shape
     _, N = b.shape
     # allocates output
-    c = torch.empty((M, N), device=device, dtype=torch.float16)
+    c = torch.empty((M, N), device=device, dtype=torch.bfloat16)
     # accumulator types
     ACC_TYPE = tl.float32  # if a.dtype in [torch.float16, torch.bfloat16, torch.float32] else tl.int32
     # launch int8_matmul_rowwise_dequantize kernel

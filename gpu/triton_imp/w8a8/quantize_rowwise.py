@@ -59,7 +59,7 @@ else:
 
     def quantize_rowwise(x: torch.Tensor):
         output = torch.empty(*x.shape, device=x.device, dtype=torch.int8)
-        output_maxs = torch.empty(x.shape[0], device=x.device, dtype=torch.float16) # max value by row
+        output_maxs = torch.empty(x.shape[0], device=x.device, dtype=torch.bfloat16) # max value by row
 
         P2 = int(2 ** (math.ceil(math.log2(x.shape[1]))))  # 找到大于或等于 x.shape[1] 的最小的 2 的幂
 

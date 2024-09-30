@@ -3,8 +3,10 @@
 import itertools
 import torch
 import triton
-from quantize_rowwise import quantize_rowwise
-from dequantize_rowwise import dequantize_rowwise
+import sys
+sys.path.append(".")
+from utils.quantize_rowwise import quantize_rowwise
+from utils.dequantize_rowwise import dequantize_rowwise
 from int8_matmul_rowwise_dequantize import int8_matmul_rowwise_dequantize
 
 def matmul(X, W_int8, state_W):

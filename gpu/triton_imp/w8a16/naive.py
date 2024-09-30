@@ -2,8 +2,10 @@ import torch
 import triton
 import triton.language as tl
 from triton import Config
-from w8a8.quantize_rowwise import quantize_rowwise
-from w8a8.dequantize_rowwise import dequantize_rowwise
+import sys
+sys.path.append(".")
+from utils.quantize_rowwise import quantize_rowwise
+from utils.dequantize_rowwise import dequantize_rowwise
 
 def get_configs_io_bound():
     configs = []

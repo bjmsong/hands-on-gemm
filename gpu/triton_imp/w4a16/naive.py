@@ -1,3 +1,5 @@
+# TODO: FIX BUG
+
 import itertools
 import torch
 import triton
@@ -44,7 +46,7 @@ config_list = [
     configs = [
         Config({'BLOCK_SIZE_M': 16, 'BLOCK_SIZE_N': 16, 'BLOCK_SIZE_K': 256, 'GROUP_SIZE_M': 8}, num_stages=5, num_warps=2),
         Config({'BLOCK_SIZE_M': 16, 'BLOCK_SIZE_N': 16, 'BLOCK_SIZE_K': 128, 'GROUP_SIZE_M': 8}, num_stages=5, num_warps=2),
-    ]+config_list,
+    ] + config_list,
     key=['M', 'N', 'K'],
 )
 @triton.jit
@@ -93,9 +95,9 @@ def uint4x2_weight_only_linear_kernel(
     offs_k = tl.arange(0, BLOCK_SIZE_K)
     x_ptrs = x_ptr + (offs_xm[:, None] * stride_xm + offs_k[None, :] * stride_xk)
     w_ptrs = w_ptr + (offs_k[:, None]//2 * stride_wk + offs_wn[None, :] * stride_wn)
-    w_shifts = (offs_k % 2) * 4
+    w_shifts = (offs_k % 2) * 4     #  [0,1,2,3...] -> [0,4,0,4,0,4...]
     b_ptrs = b_ptr + (offs_wn * stride_b)
-    step_w = BLOCK_SIZE_K//2 * stride_wk
+    step_w = BLOCK_SIZE_K//2 * stride_wk   # w方向步长减半
     step_x = BLOCK_SIZE_K * stride_xk
     # -----------------------------------------------------------
     # Iterate to compute a block of the Y matrix.
@@ -108,7 +110,7 @@ def uint4x2_weight_only_linear_kernel(
         # If it is out of bounds, set it to 0.
         x = tl.load(x_ptrs, mask=offs_k[None, :] < K - k * BLOCK_SIZE_K, other=0.0)
         w = tl.load(w_ptrs, mask=offs_k[:, None] < K - k * BLOCK_SIZE_K, other=0.0)
-        w = ((w >> w_shifts[:, None]) & 0xF) - 8
+        w = ((w >> w_shifts[:, None]) & 0xF) - 8  # 广播，右移, 取低4位，调整范围
         # We accumulate along the K dimension.
         accumulator += tl.dot(x, w.to(tl.bfloat16))
         # Advance the ptrs to the next K block.
@@ -116,7 +118,7 @@ def uint4x2_weight_only_linear_kernel(
         w_ptrs += step_w
     s = tl.load(s_ptr)
     b = tl.load(b_ptrs)
-    y = (accumulator.to(tl.bfloat16) * s)+b
+    y = (accumulator.to(tl.bfloat16) * s) + b
 
     # -----------------------------------------------------------
     # Write back the block of the output matrix Y with masks.
@@ -150,10 +152,10 @@ def uint4x2_weight_only_linear(x, w, b, s):
     )
     return y
 
-D = 2 ** 6
+D = 2 ** 8
 N = D
-x = torch.randn((1,D), device='cuda', dtype=torch.bfloat16)
-bias = torch.randn(N, device='cuda', dtype=torch.bfloat16)
+x = torch.randn((D, D), device='cuda', dtype=torch.bfloat16)
+bias = torch.randn((D, N), device='cuda', dtype=torch.bfloat16)
 scale = torch.randn(N, device='cuda', dtype=torch.bfloat16)
-w_uint4x2 = torch.randint(0, 255, (D//2, N), dtype=torch.uint8).cuda()
+w_uint4x2 = torch.randint(0, 255, (D//2, N), device='cuda', dtype=torch.uint8)  # range: (0, 255)
 uint4x2_weight_only_linear(x, w_uint4x2, bias, scale)

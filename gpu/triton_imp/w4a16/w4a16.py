@@ -1,8 +1,8 @@
+import itertools
 import torch
 import triton
 from triton import language as tl
-from dequantize import dequantize
-# from actual_base_gptq_4 import triton_matmul4
+# from quantize import quantize
 
 @triton.jit()
 def swizzle_tile(pid,
@@ -54,7 +54,7 @@ def matmul_split_k_kernel(a_ptr, b_ptr, c_ptr, scales_ptr, zeros_ptr,
     scales_ptrs = scales_ptr + offs_bn * stride_scales_n
     zeros_ptrs = zeros_ptr + ((offs_bn // 8) * stride_zeros_n)
 
-    shifter = (offs_k % 8) * 4
+    shifter = (offs_k % 8) * 4    # [0,1,2,3,4,5,6,7,8,9...] -> [0,4,8,12,16,20,24,28,0,4...]
     zeros_shifter = (offs_bn % 8) * 4
     
     acc = tl.zeros((block_m, block_n), dtype=tl.float32)
@@ -74,8 +74,8 @@ def matmul_split_k_kernel(a_ptr, b_ptr, c_ptr, scales_ptr, zeros_ptr,
         zeros = (zeros >> zeros_shifter) & 0xF
         zeros = (zeros + 1) * scales
 
-        b = (b >> shifter[:, None]) & 0xF
-        b = b * scales[None, :] - zeros[None, :]
+        b = (b >> shifter[:, None]) & 0xF   # extract int4
+        b = b * scales[None, :] - zeros[None, :]  # int4 -> fp16
 
         acc += tl.dot(a, b)
         a_ptrs += block_k * split_k * stride_ak
@@ -161,30 +161,65 @@ if __name__ == '__main__':
     m = 16
     k = 4096
     n = 4096
+
+    x = make_tensor(m, k, dtype=torch.float16)   # activation 
+    # w = make_tensor(n, k, dtype=torch.float16)
+    # zeros, scales, w_int = quantize(w, zeros, scales)
+    w = make_tensor(k//8, n, dtype=torch.int32)  # weight, 8*int4 = int32
+
+    # w_float = scale * w_int - zero
     groupsize = 128  # group quantization
     g = k // groupsize
-
-    a = make_tensor(m, k, dtype=torch.float16)   # activation 
-    b = make_tensor(k//8, n, dtype=torch.int32)  # weight, 8*int4 = int32
-    c = make_tensor(m, n, dtype=torch.float16)   # output
-    # w_int = scale * w_float + zero 
     zeros = make_tensor(g, n//8, torch.int32)
     scales = make_tensor(g, n, torch.float16)
-    
+
     # base = no_autotune(groupsize, a, b, scales, zeros)
     # print(f"{base.shape=}, {base[0][0:4]}")
 
     # c = custom_qlinear(a, b, scales, zeros)
     # print(f"{c.shape=}, {c[0][0:4]}")
 
-    split_k_output = matmul_split_k(a, b, scales, zeros)
+    split_k_output = matmul_split_k(x, w, scales, zeros)
     print(f"{split_k_output.shape=}, {split_k_output[0][0:4]}")
 
-    # b_fp16 = dequantize(b, zeros, scales)
-    # torch_output = torch.matmul(a, b_fp16)
+    # torch_output = torch.matmul(x, w.t())
     # print(f"triton_output={split_k_output}")
     # print(f"torch_output={torch_output}")
     # if torch.allclose(split_k_output, torch_output, atol=1e-2, rtol=1e-2):
     #     print("✅ Triton and Torch match")
     # else:
     #     print("❌ Triton and Torch differ")
+
+
+    M_range = [2 ** i for i in range(0, 15, 2)]
+    N_K_range = [2 ** i for i in range(10, 15, 2)]
+    matrix_range = list(itertools.product(M_range, N_K_range, N_K_range))
+    @triton.testing.perf_report(
+        triton.testing.Benchmark(
+            x_names=['M', 'N', 'K'],  # Argument names to use as an x-axis for the plot
+            x_vals=[list(_) for _ in matrix_range],  # Different possible values for `x_name`
+            line_arg='provider',  # Argument name whose value corresponds to a different line in the plot
+            # Possible values for `line_arg`
+            line_vals=['triton'],
+            # Label name for the lines
+            line_names=["Triton"],
+            # Line styles
+            styles=[('green', '-')],
+            ylabel="TFLOPS",  # Label name for the y-axis
+            plot_name="matmul-performance",  # Name for the plot, used also as a file name for saving the plot.
+            args={},
+        ))
+    def benchmark(M, N, K, provider):
+        x = make_tensor(M, K, dtype=torch.float16)
+        w = make_tensor(K//8, N, dtype=torch.int32)
+        groupsize = 1
+        g = K // groupsize
+        zeros = make_tensor(g, N//8, torch.int32)
+        scales = make_tensor(g, N, torch.float16)
+        quantiles = [0.5, 0.2, 0.8]
+        if provider == 'triton':
+            ms, min_ms, max_ms = triton.testing.do_bench(lambda: matmul_split_k(x, w, scales, zeros), quantiles=quantiles)
+        perf = lambda ms: 2 * M * N * K * 1e-9 / ms
+        return perf(ms), perf(max_ms), perf(min_ms)
+
+    benchmark.run(show_plots=True, print_data=True, save_path="plot/")

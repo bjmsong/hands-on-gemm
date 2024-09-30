@@ -366,7 +366,7 @@ for D in [2**6, 2**7, 2**8, 2**9, 2**10, 2**11]: #, 2**10, 2**12, 2**14]:
             print("uint4x2 linear")
             try:
                 assert t_w==1
-                # uint4x2_weight_only_linear(x, w_uint4x2, bias, scale)
+                uint4x2_weight_only_linear(x, w_uint4x2, bias, scale)
                 torch.cuda.synchronize()
                 result[D]["uint4x2 linear"][(t_x, t_w)] = triton.testing.do_bench(lambda: uint4x2_weight_only_linear(x, w_uint4x2, bias, scale), quantiles=quantiles)[0]
             except:

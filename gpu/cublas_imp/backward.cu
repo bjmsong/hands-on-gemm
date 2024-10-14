@@ -1,5 +1,5 @@
 /*
-nvcc -O3 --use_fast_math -lcublas -lcublasLt -Xcompiler -fopenmp matmul_backward.cu -o matmul_backward
+nvcc -O3 --use_fast_math -lcublas -lcublasLt -Xcompiler -fopenmp backward.cu -o matmul_backward
 
 OMP_NUM_THREADS=32 ./matmul_backward 1
 */
@@ -9,7 +9,6 @@ OMP_NUM_THREADS=32 ./matmul_backward 1
 #include <cublas_v2.h>
 #include <cuda_runtime.h>
 #include <omp.h>
-#include <float.h>
 #include <utility>
 #include "../helper.h" 
 
@@ -135,7 +134,6 @@ void matmul_backward(float* dinp, float* dweight, float* dbias,
     // recall the forward pass was calculated with alpha = 1.0f, beta = 0.0f as:
     // cublasSgemm(cublas_handle, CUBLAS_OP_T, CUBLAS_OP_N, OC, B*T, C, &alpha, weight, C, inp, C, &beta, out, OC);
 
-    cublasHandle_t cublas_handle;
     // backward to input
     checkcuBLAS(cublasSgemm(cublas_handle, CUBLAS_OP_N, CUBLAS_OP_N, C, B*T, OC, &alpha, weight, C, dout, OC, &beta, dinp, C));
     // backward to weight
@@ -172,106 +170,6 @@ void matmul_backward(float* dinp, float* dweight, float* dbias,
 }
 
 
-float* make_random_float(size_t N) {
-    float* arr = (float*)malloc(N * sizeof(float));
-    for (size_t i = 0; i < N; i++) {
-        arr[i] = ((float)rand() / RAND_MAX) * 2.0 - 1.0; // range -1..1
-        // arr[i] = 1;  // for debug
-    }
-    return arr;
-}
-
-float* make_zeros_float(size_t N) {
-    float* arr = (float*)malloc(N * sizeof(float));
-    memset(arr, 0, N * sizeof(float)); // all zero
-    return arr;
-}
-
-float* make_ones_float(size_t N) {
-    float* arr = (float*)malloc(N * sizeof(float));
-    for (size_t i = 0; i < N; i++) {
-        arr[i] = 1.0f;
-    }
-    return arr;
-}
-
-template<class D, class T>
-void validate_result(D* device_result, const T* cpu_reference, const char* name, std::size_t num_elements, T tolerance=1e-4) {
-    D* out_gpu = (D*)malloc(num_elements * sizeof(D));
-    cudaCheck(cudaMemcpy(out_gpu, device_result, num_elements * sizeof(D), cudaMemcpyDeviceToHost));
-    int nfaults = 0;
-#ifndef ENABLE_BF16
-    float epsilon = FLT_EPSILON;
-#else
-    float epsilon = 0.079;
-#endif
-    for (int i = 0; i < num_elements; i++) {
-        // Skip masked elements
-        if(!isfinite(cpu_reference[i]))
-            continue;
-
-        // print the first few comparisons
-        if (i < 5) {
-            printf("%f %f\n", cpu_reference[i], (T)out_gpu[i]);
-        }
-        // effective tolerance is based on expected rounding error (epsilon),
-        // plus any specified additional tolerance
-        float t_eff = tolerance + fabs(cpu_reference[i]) * epsilon;
-        // ensure correctness for all elements.
-        if (fabs(cpu_reference[i] - (T)out_gpu[i]) > t_eff) {
-            printf("Mismatch of %s at %d: CPU_ref: %f vs GPU: %f\n", name, i, cpu_reference[i], (T)out_gpu[i]);
-            nfaults ++;
-            if (nfaults >= 10) {
-                free(out_gpu);
-                exit(EXIT_FAILURE);
-            }
-        }
-    }
-
-    if (nfaults > 0) {
-        free(out_gpu);
-        exit(EXIT_FAILURE);
-    }
-
-    free(out_gpu);
-}
-
-template<class Kernel, class... KernelArgs>
-float benchmark_kernel(int repeats, Kernel kernel, KernelArgs&&... kernel_args) {
-    cudaEvent_t start, stop;
-    // prepare buffer to scrub L2 cache between benchmarks
-    // just memset a large dummy array, recommended by
-    // https://stackoverflow.com/questions/31429377/how-can-i-clear-flush-the-l2-cache-and-the-tlb-of-a-gpu
-    // and apparently used in nvbench.
-    int deviceIdx = 0;
-    checkCuda(cudaSetDevice(deviceIdx));
-    cudaDeviceProp deviceProp;
-    checkCuda(cudaGetDeviceProperties(&deviceProp, deviceIdx));
-    void* flush_buffer;
-    checkCuda(cudaMalloc(&flush_buffer, deviceProp.l2CacheSize));
-
-    checkCuda(cudaEventCreate(&start));
-    checkCuda(cudaEventCreate(&stop));
-    float elapsed_time = 0.f;
-    for (int i = 0; i < repeats; i++) {
-        // clear L2
-        checkCuda(cudaMemset(flush_buffer, 0, deviceProp.l2CacheSize));
-        // now we can start recording the timing of the kernel
-        checkCuda(cudaEventRecord(start, nullptr));
-        kernel(std::forward<KernelArgs>(kernel_args)...);
-        checkCuda(cudaEventRecord(stop, nullptr));
-        checkCuda(cudaEventSynchronize(start));
-        checkCuda(cudaEventSynchronize(stop));
-        float single_call;
-        checkCuda(cudaEventElapsedTime(&single_call, start, stop));
-        elapsed_time += single_call;
-    }
-
-    checkCuda(cudaFree(flush_buffer));
-
-    return elapsed_time / repeats;
-}
-
 // ----------------------------------------------------------------------------
 
 int main(int argc, char **argv) {
@@ -291,7 +189,6 @@ int main(int argc, char **argv) {
 
     // setup cuBLAS and its mathmodes, ensure fp32
     int enable_tf32 = 0; // use fp32 to get accurate results for checking w.r.t. CPU
-    cublasHandle_t cublas_handle;
     checkcuBLAS(cublasCreate(&cublas_handle));
     printf("enable_tf32: %d\n", enable_tf32);
     cublasMath_t cublas_math_mode = enable_tf32 ? CUBLAS_TF32_TENSOR_OP_MATH : CUBLAS_DEFAULT_MATH;
@@ -347,7 +244,7 @@ int main(int argc, char **argv) {
 
     // now benchmark the kernel
     int repeat_times = 100;
-    float elapsed_time = benchmark_kernel(repeat_times, matmul_backward, kernel_num,
+    float elapsed_time = benchmark_kernel(repeat_times, matmul_backward,
                                           d_dinp, d_dweight, d_dbias, d_dout, d_inp, d_weight, d_ones,
                                           B, T, C, OC);
     printf("time %.4f ms\n", elapsed_time);

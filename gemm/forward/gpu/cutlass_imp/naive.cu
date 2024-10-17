@@ -33,58 +33,165 @@
 
 #include "cutlass/cutlass.h"
 #include "cutlass/gemm/device/gemm.h"
+
+#include "cutlass/util/command_line.h"
 #include "cutlass/util/host_tensor.h"
 #include "cutlass/util/reference/device/gemm.h"
 #include "cutlass/util/reference/host/tensor_compare.h"
 #include "cutlass/util/reference/host/tensor_copy.h"
 #include "cutlass/util/reference/host/tensor_fill.h"
 #include "cutlass/util/tensor_view_io.h"
+
 #include "helper.h"
+
+/////////////////////////////////////////////////////////////////////////////////////////////////
+
+/// Result structure
+struct Result {
+
+  double runtime_ms;
+  double gflops;
+  cutlass::Status status;
+  cudaError_t error;
+  bool passed;
+
+  //
+  // Methods
+  //
+
+  Result(
+    double runtime_ms = 0,
+    double gflops = 0,
+    cutlass::Status status = cutlass::Status::kSuccess,
+    cudaError_t error = cudaSuccess
+  ):
+    runtime_ms(runtime_ms), gflops(gflops), status(status), error(error), passed(true) { }
+};
+
+///////////////////////////////////////////////////////////////////////////////////////////////////
+
+// Command line options parsing
+struct Options {
+
+  bool help;
+
+  cutlass::gemm::GemmCoord problem_size;
+  int batch_count;
+  float alpha;
+  float beta;
+
+  bool reference_check;
+  int iterations;
+  
+  Options():
+    help(false),
+    problem_size({5120, 4096, 4096}),
+    batch_count(1),
+    reference_check(true),
+    iterations(20),
+    alpha(1),
+    beta() { }
+
+  bool valid() {
+    return true;
+  }
+
+  // Parses the command line
+  void parse(int argc, char const **args) {
+    cutlass::CommandLine cmd(argc, args);
+
+    if (cmd.check_cmd_line_flag("help")) {
+      help = true;
+    }
+
+    cmd.get_cmd_line_argument("m", problem_size.m());
+    cmd.get_cmd_line_argument("n", problem_size.n());
+    cmd.get_cmd_line_argument("k", problem_size.k());
+
+    cmd.get_cmd_line_argument("alpha", alpha);
+    cmd.get_cmd_line_argument("beta", beta);
+    
+    cmd.get_cmd_line_argument("iterations", iterations);
+
+  }
+
+  /// Prints the usage statement.
+  std::ostream & print_usage(std::ostream &out) const {
+
+    out << "14_ampere_tf32_tensorop_gemm example\n\n"
+      << "  This example uses the CUTLASS Library to execute TF32 tensorop GEMM computations.\n\n"
+      << "Options:\n\n"
+      << "  --help                      If specified, displays this usage statement.\n\n"
+      << "  --m=<int>                   GEMM M dimension\n"
+      << "  --n=<int>                   GEMM N dimension\n"
+      << "  --k=<int>                   GEMM K dimension\n"
+      << "  --alpha=<f32>               Epilogue scalar alpha\n"
+      << "  --beta=<f32>                Epilogue scalar beta\n\n"
+      << "  --iterations=<int>          Number of profiling iterations to perform.\n\n";
+
+    out << "\n\nExamples:\n\n"
+      << "$ ./examples/14_ampere_tf32_tensorop_gemm/14_ampere_tf32_tensorop_gemm --m=1024 --n=512 --k=1024 \\\n"
+      << "     --alpha=2 --beta=0.707 \n\n";
+
+    return out;
+  }
+
+  /// Compute performance in GFLOP/s
+  double gflops(double runtime_s) const {
+
+    // Number of real-valued multiply-adds 
+    int64_t fmas = problem_size.product() * batch_count;
+    
+    // Two flops per multiply-add
+    return 2.0 * double(fmas) / double(1.0e9) / runtime_s;
+  }
+};
+
+///////////////////////////////////////////////////////////////////////////////////////////////////
 
 // The code section below describes datatype for input, output matrices and computation between
 // elements in input matrices.
 using ElementAccumulator = float;                   // <- data type of accumulator
 using ElementComputeEpilogue = ElementAccumulator;  // <- data type of epilogue operations
-using ElementInputA = cutlass::half_t;              // <- data type of elements in input matrix A
-using ElementInputB = cutlass::half_t;              // <- data type of elements in input matrix B
+using ElementInputA = cutlass::half_t;                        // <- data type of elements in input matrix A
+using ElementInputB = cutlass::half_t;                        // <- data type of elements in input matrix B
 using ElementOutput = float;                        // <- data type of elements in output matrix D
 
 // The code section below describes matrix layout of input and output matrices. Column Major for
 // Matrix A, Row Major for Matrix B and Row Major for Matrix C
-using LayoutInputA = cutlass::layout::ColumnMajor;
-using LayoutInputB = cutlass::layout::RowMajor;
+using LayoutInputA = cutlass::layout::RowMajor;
+using LayoutInputB = cutlass::layout::ColumnMajor;
 using LayoutOutput = cutlass::layout::RowMajor;
 
 // This code section describes whether you want to use tensor cores or regular SIMT cores on GPU SM
 using MMAOp = cutlass::arch::OpClassTensorOp;
 
 // This code section describes CUDA SM architecture number
-using SmArch = cutlass::arch::Sm70;
+using SmArch = cutlass::arch::Sm80;
 
 // This code section describes the tile size a thread block will compute
 using ShapeMMAThreadBlock =
-    cutlass::gemm::GemmShape<128, 128, 32>;  // <- threadblock tile M = 128, N = 128, K = 32
+    cutlass::gemm::GemmShape<128, 128, 16>;  // <- threadblock tile M = 128, N = 128, K = 16
 // This code section describes tile size a warp will compute
-using ShapeMMAWarp = cutlass::gemm::GemmShape<64, 64, 32>;  // <- warp tile M = 64, N = 64, K = 32 
+using ShapeMMAWarp = cutlass::gemm::GemmShape<64, 64, 16>;  // <- warp tile M = 64, N = 64, K = 16
 // This code section describes the size of MMA op
-using ShapeMMAOp = cutlass::gemm::GemmShape<8, 8, 4>;  // <- MMA Op tile M = 8, N = 8, K = 4
+using ShapeMMAOp = cutlass::gemm::GemmShape<16, 8, 8>;  // <- MMA Op tile M = 16, N = 8, K = 8
 
 // This code section describes how threadblocks are scheduled on GPU
 using SwizzleThreadBlock = cutlass::gemm::threadblock::GemmIdentityThreadblockSwizzle<>;
 
-// This code section describes ?
+// This code section describes the epilogue part of the kernel
 using EpilogueOp = cutlass::epilogue::thread::LinearCombination<
     ElementOutput,                                     // <- data type of output matrix
-    128 / cutlass::sizeof_bits<ElementOutput>::value,  // <- this is the number of elements per
-                                                       // vectorized memory access. For half
-                                                       // precision, it's 8 elements. This becomes
-                                                       // the vector width of math instructions in
-                                                       // epilogue too
+    128 / cutlass::sizeof_bits<ElementOutput>::value,  // <- the number of elements per vectorized
+                                                       // memory access. For a byte, it's 16
+                                                       // elements. This becomes the vector width of
+                                                       // math instructions in the epilogue too
     ElementAccumulator,                                // <- data type of accumulator
     ElementComputeEpilogue>;  // <- data type for alpha/beta in linear combination function
 
 // Number of pipelines you want to use
-constexpr int NumStages = 2;
+constexpr int NumStages = 4;
 
 using Gemm = cutlass::gemm::device::Gemm<ElementInputA,
                                          LayoutInputA,
@@ -102,30 +209,10 @@ using Gemm = cutlass::gemm::device::Gemm<ElementInputA,
                                          SwizzleThreadBlock,
                                          NumStages>;
 
-int run() {
-
-  cudaDeviceProp props;
-
-  cudaError_t error = cudaGetDeviceProperties(&props, 0);
-  if (error != cudaSuccess) {
-    std::cerr << "cudaGetDeviceProperties() returned an error: " << cudaGetErrorString(error) << std::endl;
-    return -1;
-  }
-
-  if (props.major != 7) {
-    std::cerr << "Volta Tensor Ops must be run on a machine with compute capability of 70, 72, or 75."
-              << std::endl;
-
-    // Return 0 so tests are considered passing if run on unsupported architectures or CUDA Toolkits.
-    return 0;
-  }
-
-  const int length_m = 5120;
-  const int length_n = 4096;
-  const int length_k = 4096;
+int run(Options &options) {
 
   // Create a tuple of problem size for matrix multiplication
-  cutlass::gemm::GemmCoord problem_size(length_m, length_n, length_k);
+  cutlass::gemm::GemmCoord problem_size = options.problem_size;
 
   // Initialize tensors using CUTLASS helper functions
   cutlass::HostTensor<ElementInputA, LayoutInputA> tensor_a(
@@ -173,8 +260,8 @@ int run() {
   tensor_ref_d.sync_device();
 
   // Initialize alpha and beta for dot product computation
-  ElementComputeEpilogue alpha = ElementComputeEpilogue(1);
-  ElementComputeEpilogue beta = ElementComputeEpilogue(0);
+  ElementComputeEpilogue alpha = ElementComputeEpilogue(options.alpha);
+  ElementComputeEpilogue beta = ElementComputeEpilogue(options.beta);
 
   // Split K dimension into 1 partitions
   int split_k_slices = 1;
@@ -206,9 +293,74 @@ int run() {
   status = gemm_op.initialize(arguments, workspace.get());
   CUTLASS_CHECK(status);
 
-  // Launch initialized CUTLASS kernel
-  status = gemm_op();
-  CUTLASS_CHECK(status);
+  // Result structure
+  Result result;
+
+  //
+  // Construct events
+  //
+
+  cudaEvent_t events[2];
+
+  for (auto & event : events) {
+    result.error = cudaEventCreate(&event);
+    if (result.error != cudaSuccess) {
+      std::cerr << "cudaEventCreate() failed: " << cudaGetErrorString(result.error) << std::endl;
+      return -1;
+    }
+  }
+
+  // Record an event at the start of a series of GEMMs
+  result.error = cudaEventRecord(events[0]);
+  if (result.error != cudaSuccess) {
+    std::cerr << "cudaEventRecord() failed: " << cudaGetErrorString(result.error) << std::endl;
+    return -1;
+  }
+
+  //
+  // Run profiling loop
+  //
+
+  for (int iter = 0; iter < options.iterations; ++iter) {
+    // Launch initialized CUTLASS kernel
+    status = gemm_op();
+    CUTLASS_CHECK(status);
+  }
+
+  //
+  // Stop profiling loop
+  //
+
+  // Record an event when the GEMMs are complete
+  result.error = cudaEventRecord(events[1]);
+  if (result.error != cudaSuccess) {
+    std::cerr << "cudaEventRecord() failed: " << cudaGetErrorString(result.error) << std::endl;
+    return -1;
+  }
+
+  // Wait for work on the device to complete.
+  result.error = cudaEventSynchronize(events[1]);
+  if (result.error != cudaSuccess) {
+    std::cerr << "cudaEventSynchronize() failed: " << cudaGetErrorString(result.error) << std::endl;
+    return -1;
+  }
+
+  // Measure elapsed runtime
+  float runtime_ms = 0;
+  result.error = cudaEventElapsedTime(&runtime_ms, events[0], events[1]);
+  if (result.error != cudaSuccess) {
+    std::cerr << "cudaEventElapsed() failed: " << cudaGetErrorString(result.error) << std::endl;
+    return -1;
+  }
+
+  // Compute average runtime and GFLOPs.
+  result.runtime_ms = double(runtime_ms) / double(options.iterations);
+  result.gflops = options.gflops(result.runtime_ms / 1000.0);
+
+  // Cleanup
+  for (auto event : events) {
+    (void)cudaEventDestroy(event);
+  }
 
   // Create instantiation for device reference gemm kernel
   cutlass::reference::device::Gemm<ElementInputA,
@@ -242,24 +394,67 @@ int run() {
     tensor_d.host_view(),
     tensor_ref_d.host_view());
 
+  if (passed) {
+    std::cout << "Runtime: " << result.runtime_ms << " ms" << std::endl;
+    std::cout << " TFLOPs: " << result.gflops/1000 << std::endl;
+  }
+
   std::cout << (passed ? "Passed" : "Failed") << std::endl;
 
   return (passed ? 0  : -1);
 }
 
-int main() {
+int main(int argc, const char **argv) {
+  int M = std::atoi(argv[1]);
+  int K = std::atoi(argv[2]);
+  int N = std::atoi(argv[3]);
 
-  // Volta Tensor Core operations exposed with mma.sync are first available in CUDA 10.1.
+  bool notSupported = false;
+
+  // Ampere Tensor Core operations exposed with mma.sync and ldmatrix are first available
+  // in CUDA 11.0. 
   //
-  // CUTLASS must be compiled with CUDA 10.1 Toolkit to run these examples.
-  if (!(__CUDACC_VER_MAJOR__ > 10 || (__CUDACC_VER_MAJOR__ == 10 && __CUDACC_VER_MINOR__ >= 1))) {
-    std::cerr << "Volta Tensor Core operations must be compiled with CUDA 10.1 Toolkit or later." << std::endl;
+  // CUTLASS must be compiled with CUDA 11.0 Toolkit to run these examples.
+  if (!(__CUDACC_VER_MAJOR__ >= 11)) {
+    std::cerr << "Ampere Tensor Core operations must be compiled with CUDA 11.0 Toolkit or later." << std::endl;
+    notSupported = true;
+  }
 
-    // Returning zero when built on older Toolkits so tests pass. The actions of this SDK example are no-op.
+  cudaDeviceProp props;
+
+  cudaError_t error = cudaGetDeviceProperties(&props, 0);
+  if (error != cudaSuccess) {
+    std::cerr << "cudaGetDeviceProperties() returned an error: " << cudaGetErrorString(error) << std::endl;
+    return -1;
+  }
+
+  if (!((props.major * 10 + props.minor) >= 80)) {
+    std::cerr << "Ampere Tensor Core operations must be run on a machine with compute capability at least 80."
+              << std::endl;
+    notSupported = true;
+  }
+
+  if (notSupported) {
+    // Returning zero so this test passes on older Toolkits. Its actions are no-op.
     return 0;
   }
-  else {
-    return run();
-  }
-}
 
+  Options options;
+  options.parse(argc, argv);
+  options.problem_size = {M, N, K};
+
+  if (options.help) {
+    options.print_usage(std::cout) << std::endl;
+    return 0;
+  }
+
+  printf("%d x %d x %d TF32 tensor op Matrix Multiply\n", \
+    options.problem_size.m(), options.problem_size.n(), options.problem_size.k());
+
+  if (!options.valid()) {
+    std::cerr << "Invalid problem." << std::endl;
+    return -1;
+  }
+
+  return run(options);
+}

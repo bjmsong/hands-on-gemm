@@ -33,7 +33,6 @@
 
 #include "cutlass/cutlass.h"
 #include "cutlass/gemm/device/gemm.h"
-#include "cutlass/half.h"
 #include "cutlass/util/host_tensor.h"
 #include "cutlass/util/reference/device/gemm.h"
 #include "cutlass/util/reference/host/tensor_compare.h"
@@ -41,46 +40,46 @@
 #include "cutlass/util/reference/host/tensor_fill.h"
 #include "cutlass/util/tensor_view_io.h"
 #include "helper.h"
-#include "../helper.h"
 
 // The code section below describes datatype for input, output matrices and computation between
 // elements in input matrices.
-using ElementAccumulator = int32_t;                 // <- data type of accumulator
+using ElementAccumulator = float;                   // <- data type of accumulator
 using ElementComputeEpilogue = ElementAccumulator;  // <- data type of epilogue operations
-using ElementInputA = int8_t;                       // <- data type of elements in input matrix A
-using ElementInputB = int8_t;                       // <- data type of elements in input matrix B
-using ElementOutput = int32_t;                      // <- data type of elements in output matrix D
+using ElementInputA = cutlass::half_t;              // <- data type of elements in input matrix A
+using ElementInputB = cutlass::half_t;              // <- data type of elements in input matrix B
+using ElementOutput = float;                        // <- data type of elements in output matrix D
 
-// The code section below describes matrix layout of input and output matrices. Row Major for
-// Matrix A, Column Major for Matrix B and Row Major for Matrix C
-using LayoutInputA = cutlass::layout::RowMajor;
-using LayoutInputB = cutlass::layout::ColumnMajor;
+// The code section below describes matrix layout of input and output matrices. Column Major for
+// Matrix A, Row Major for Matrix B and Row Major for Matrix C
+using LayoutInputA = cutlass::layout::ColumnMajor;
+using LayoutInputB = cutlass::layout::RowMajor;
 using LayoutOutput = cutlass::layout::RowMajor;
 
 // This code section describes whether you want to use tensor cores or regular SIMT cores on GPU SM
 using MMAOp = cutlass::arch::OpClassTensorOp;
 
 // This code section describes CUDA SM architecture number
-using SmArch = cutlass::arch::Sm80;
+using SmArch = cutlass::arch::Sm70;
 
 // This code section describes the tile size a thread block will compute
 using ShapeMMAThreadBlock =
-    cutlass::gemm::GemmShape<128, 256, 64>;  // <- threadblock tile M = 128, N = 256, K = 64
+    cutlass::gemm::GemmShape<128, 128, 32>;  // <- threadblock tile M = 128, N = 128, K = 32
 // This code section describes tile size a warp will compute
-using ShapeMMAWarp = cutlass::gemm::GemmShape<64, 64, 64>;  // <- warp tile M = 64, N = 64, K = 64 
+using ShapeMMAWarp = cutlass::gemm::GemmShape<64, 64, 32>;  // <- warp tile M = 64, N = 64, K = 32 
 // This code section describes the size of MMA op
-using ShapeMMAOp = cutlass::gemm::GemmShape<8, 8, 16>;  // <- MMA Op tile M = 8, N = 8, K = 16
+using ShapeMMAOp = cutlass::gemm::GemmShape<8, 8, 4>;  // <- MMA Op tile M = 8, N = 8, K = 4
 
 // This code section describes how threadblocks are scheduled on GPU
-using SwizzleThreadBlock = cutlass::gemm::threadblock::GemmIdentityThreadblockSwizzle<>;  // <- ??
+using SwizzleThreadBlock = cutlass::gemm::threadblock::GemmIdentityThreadblockSwizzle<>;
 
-// This code section describes the epilogue part of the kernel
+// This code section describes ?
 using EpilogueOp = cutlass::epilogue::thread::LinearCombination<
     ElementOutput,                                     // <- data type of output matrix
-    128 / cutlass::sizeof_bits<ElementOutput>::value,  // <- the number of elements per vectorized
-                                                       // memory access. For a byte, it's 16
-                                                       // elements. This becomes the vector width of
-                                                       // math instructions in the epilogue too
+    128 / cutlass::sizeof_bits<ElementOutput>::value,  // <- this is the number of elements per
+                                                       // vectorized memory access. For half
+                                                       // precision, it's 8 elements. This becomes
+                                                       // the vector width of math instructions in
+                                                       // epilogue too
     ElementAccumulator,                                // <- data type of accumulator
     ElementComputeEpilogue>;  // <- data type for alpha/beta in linear combination function
 
@@ -103,11 +102,27 @@ using Gemm = cutlass::gemm::device::Gemm<ElementInputA,
                                          SwizzleThreadBlock,
                                          NumStages>;
 
-int run(int M, int N, int K) {
+int run() {
 
-  const int length_m = M;
-  const int length_n = N;
-  const int length_k = K;
+  cudaDeviceProp props;
+
+  cudaError_t error = cudaGetDeviceProperties(&props, 0);
+  if (error != cudaSuccess) {
+    std::cerr << "cudaGetDeviceProperties() returned an error: " << cudaGetErrorString(error) << std::endl;
+    return -1;
+  }
+
+  if (props.major != 7) {
+    std::cerr << "Volta Tensor Ops must be run on a machine with compute capability of 70, 72, or 75."
+              << std::endl;
+
+    // Return 0 so tests are considered passing if run on unsupported architectures or CUDA Toolkits.
+    return 0;
+  }
+
+  const int length_m = 5120;
+  const int length_n = 4096;
+  const int length_k = 4096;
 
   // Create a tuple of problem size for matrix multiplication
   cutlass::gemm::GemmCoord problem_size(length_m, length_n, length_k);
@@ -192,32 +207,8 @@ int run(int M, int N, int K) {
   CUTLASS_CHECK(status);
 
   // Launch initialized CUTLASS kernel
-  int WARMUP_TIMES = 100;
-  for (int n_count=0; n_count < WARMUP_TIMES; n_count++){
-      status = gemm_op();
-  }
-
-  cudaEvent_t start, end;
-  checkCuda(cudaEventCreate(&start));
-  checkCuda(cudaEventCreate(&end));
-  checkCuda(cudaEventRecord(start));
-  cudaDeviceSynchronize();
-
-  int EXECUTE_TIMES = 100;
-  for (int n_count=0; n_count < EXECUTE_TIMES; n_count++){
-      status = gemm_op();
-  }
+  status = gemm_op();
   CUTLASS_CHECK(status);
-  cudaDeviceSynchronize();
-  checkCuda(cudaEventRecord(end));
-  checkCuda(cudaEventSynchronize(start));
-  checkCuda(cudaEventSynchronize(end));
-
-  float msec;
-  cudaEventElapsedTime(&msec, start, end);
-
-  printf("spend %f ms with size of (%d, %d, %d)\n", msec/EXECUTE_TIMES, M, N, K);
-  printf("Computational Throughput: %f TFLOPS\n", (float)2*M*N*K*1e-9*EXECUTE_TIMES/msec);
 
   // Create instantiation for device reference gemm kernel
   cutlass::reference::device::Gemm<ElementInputA,
@@ -256,41 +247,19 @@ int run(int M, int N, int K) {
   return (passed ? 0  : -1);
 }
 
-int main(int argc, char** argv) {
-  int N = std::atoi(argv[1]);
-  int M = N;
-  int K = N;
+int main() {
 
-  bool notSupported = false;
-
-  // Turing Tensor Core operations exposed with mma.sync and ldmatrix are first available
-  // in CUDA 10.2. 
+  // Volta Tensor Core operations exposed with mma.sync are first available in CUDA 10.1.
   //
-  // CUTLASS must be compiled with CUDA 10.2 Toolkit to run these examples.
-  if (!(__CUDACC_VER_MAJOR__ > 10 || (__CUDACC_VER_MAJOR__ == 10 && __CUDACC_VER_MINOR__ >= 2))) {
-    std::cerr << "Turing Tensor Core operations must be compiled with CUDA 10.2 Toolkit or later." << std::endl;
-    notSupported = true;
-  }
+  // CUTLASS must be compiled with CUDA 10.1 Toolkit to run these examples.
+  if (!(__CUDACC_VER_MAJOR__ > 10 || (__CUDACC_VER_MAJOR__ == 10 && __CUDACC_VER_MINOR__ >= 1))) {
+    std::cerr << "Volta Tensor Core operations must be compiled with CUDA 10.1 Toolkit or later." << std::endl;
 
-  cudaDeviceProp props;
-
-  cudaError_t error = cudaGetDeviceProperties(&props, 0);
-  if (error != cudaSuccess) {
-    std::cerr << "cudaGetDeviceProperties() returned an error: " << cudaGetErrorString(error) << std::endl;
-    return -1;
-  }
-
-  if (!((props.major * 10 + props.minor) >= 75)) {
-    std::cerr << "Turing Tensor Core operations must be run on a machine with compute capability at least 75."
-              << std::endl;
-
-    notSupported = true;
-  }
-
-  if (notSupported) {
-    // Returning zero so this test passes on older Toolkits. Its actions are no-op.
+    // Returning zero when built on older Toolkits so tests pass. The actions of this SDK example are no-op.
     return 0;
   }
-
-  return run(M, N, K);
+  else {
+    return run();
+  }
 }
+
